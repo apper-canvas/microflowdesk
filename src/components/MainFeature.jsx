@@ -470,7 +470,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
       {/* Render subtasks */}
       {!task.parentTaskId && getSubtasks(task.id).length > 0 && (
         <div className="mt-4 space-y-4">
-          {getSubtasks(task.id).map(subtask => renderTaskCard(subtask, subtask.id))}
+          {getSubtasks(task.id).map(subtask => renderTaskCard(subtask))}
         </div>
       )}
     </div>
