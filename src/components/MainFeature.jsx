@@ -576,6 +576,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
           <span className="sm:hidden">Create</span>
         </motion.button>
       </div>
+      </div>
 
       {/* Items Grid */}
       {currentItems.length > 0 ? (
