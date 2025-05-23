@@ -25,6 +25,10 @@ const Home = ({ darkMode, toggleDarkMode }) => {
 
   // Load collaboration data
   useEffect(() => {
+    // Load actual data from localStorage
+    const savedData = localStorage.getItem('flowdesk-data')
+    const actualData = savedData ? JSON.parse(savedData) : { workspaces: [], projects: [], collaborators: [] }
+    
     const mockTeamMembers = [
       { id: 'user2', name: 'Jane Smith', email: 'jane@example.com', avatar: null, isOnline: false, lastSeen: '2 hours ago', role: 'Designer' },
       { id: 'user3', name: 'Mike Johnson', email: 'mike@example.com', avatar: null, isOnline: true, lastSeen: 'now', role: 'Developer' },
@@ -32,11 +36,19 @@ const Home = ({ darkMode, toggleDarkMode }) => {
       { id: 'user5', name: 'David Brown', email: 'david@example.com', avatar: null, isOnline: true, lastSeen: 'now', role: 'Analyst' }
     ]
 
-    const mockSharedWorkspaces = [
-      { id: 'ws1', name: 'Marketing Campaign', memberCount: 4, lastActivity: '30 minutes ago' },
-      { id: 'ws2', name: 'Product Development', memberCount: 6, lastActivity: '2 hours ago' },
-      { id: 'ws3', name: 'Client Project', memberCount: 3, lastActivity: '1 day ago' }
-    ]
+    // Convert actual workspaces to collaboration format
+    const sharedWorkspaces = actualData.workspaces.map(workspace => {
+      const project = actualData.projects.find(p => p.id === workspace.projectId)
+      const collaborators = actualData.collaborators.filter(c => c.itemId === workspace.id && c.itemType === 'workspaces')
+      const memberCount = collaborators.length + 1 // +1 for owner
+      
+      return {
+        ...workspace,
+        memberCount,
+        lastActivity: workspace.updatedAt ? new Date(workspace.updatedAt).toLocaleString() : 'No recent activity',
+        projectName: project?.name || 'Unknown Project'
+      }
+    })
 
     const mockRecentActivity = [
       { id: 1, user: 'Mike Johnson', action: 'completed task', item: 'UI Design Review', time: '5 minutes ago', type: 'task' },
@@ -47,7 +59,7 @@ const Home = ({ darkMode, toggleDarkMode }) => {
 
     setCollaborationData({
       teamMembers: mockTeamMembers,
-      sharedWorkspaces: mockSharedWorkspaces,
+      sharedWorkspaces: sharedWorkspaces,
       recentActivity: mockRecentActivity
     })
   }, [])
@@ -60,6 +72,12 @@ const Home = ({ darkMode, toggleDarkMode }) => {
       case 'project': return 'FolderOpen'
       default: return 'Activity'
     }
+  }
+
+  const handleWorkspaceClick = (workspace) => {
+    setActiveTab('projects')
+    // Dispatch event to MainFeature to select this workspace
+    window.dispatchEvent(new CustomEvent('selectWorkspace', { detail: workspace }))
   }
 
   return (
@@ -156,7 +174,10 @@ const Home = ({ darkMode, toggleDarkMode }) => {
                 </h3>
                 <div className="space-y-2">
                   {collaborationData.sharedWorkspaces.map(workspace => (
-                    <div key={workspace.id} className="p-3 bg-surface-50 dark:bg-surface-700/50 rounded-xl">
+                    <button
+                      key={workspace.id}
+                      onClick={() => handleWorkspaceClick(workspace)}
+                      className="w-full p-3 bg-surface-50 dark:bg-surface-700/50 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-600/50 transition-all duration-200 text-left">
                       <div className="flex items-center justify-between mb-1">
                         <div className="font-medium text-surface-900 dark:text-surface-100 text-sm">
                           {workspace.name}
@@ -167,10 +188,18 @@ const Home = ({ darkMode, toggleDarkMode }) => {
                         </div>
                       </div>
                       <div className="text-xs text-surface-500">
+                        Project: {workspace.projectName}
+                      </div>
+                      <div className="text-xs text-surface-400 mt-1">
                         Last activity: {workspace.lastActivity}
                       </div>
-                    </div>
+                    </button>
                   ))}
+                  {collaborationData.sharedWorkspaces.length === 0 && (
+                    <div className="text-center py-4 text-surface-500 text-sm">
+                      No shared workspaces yet
+                    </div>
+                  )}
                 </div>
               </div>
 

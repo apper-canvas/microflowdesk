@@ -53,6 +53,16 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     window.dispatchEvent(new CustomEvent('tasksUpdated'))
   }, [items])
 
+  // Listen for workspace selection from collaboration sidebar
+  useEffect(() => {
+    const handleWorkspaceSelect = (event) => {
+      const workspace = event.detail
+      setSelectedWorkspace(workspace)
+    }
+    window.addEventListener('selectWorkspace', handleWorkspaceSelect)
+    return () => window.removeEventListener('selectWorkspace', handleWorkspaceSelect)
+  }, [])
+
   // Handle date filtering when selectedDate changes
   useEffect(() => {
     setFilteredByDate(!!selectedDate)
