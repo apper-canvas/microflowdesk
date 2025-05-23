@@ -7,6 +7,7 @@ import 'react-toastify/dist/ReactToastify.css'
 
 function App() {
   const [darkMode, setDarkMode] = useState(false)
+  const [selectedDate, setSelectedDate] = useState(null)
 
   useEffect(() => {
     const savedTheme = localStorage.getItem('flowdesk-theme')
@@ -30,7 +31,7 @@ function App() {
   return (
     <div className={`min-h-screen transition-all duration-300 ${darkMode ? 'dark' : ''}`}>
       <Routes>
-        <Route path="/" element={<Home darkMode={darkMode} toggleDarkMode={toggleDarkMode} />} />
+        <Route path="/" element={<Home darkMode={darkMode} toggleDarkMode={toggleDarkMode} selectedDate={selectedDate} setSelectedDate={setSelectedDate} />} />
         <Route path="*" element={<NotFound />} />
       </Routes>
       

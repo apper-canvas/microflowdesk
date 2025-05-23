@@ -18,7 +18,8 @@
     "lucide-react": "^0.299.0",
     "date-fns": "^4.1.0",
     "react-redux": "^9.2.0",
-    "@reduxjs/toolkit": "2.7.0"
+    "@reduxjs/toolkit": "2.7.0",
+    "react-calendar": "^4.8.0"
   },
   "devDependencies": {
     "@types/react": "^18.2.15",

@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'react-toastify'
-import { format } from 'date-fns'
+import { format, isSameDay, isToday, isPast, startOfDay } from 'date-fns'
 import ApperIcon from './ApperIcon'
 
-const MainFeature = ({ activeTab }) => {
+const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
+  const [filteredByDate, setFilteredByDate] = useState(false)
   const [items, setItems] = useState({
     tasks: [],
     projects: [],
@@ -26,6 +27,13 @@ const MainFeature = ({ activeTab }) => {
   // Save data to localStorage whenever items change
   useEffect(() => {
     localStorage.setItem('flowdesk-data', JSON.stringify(items))
+    // Dispatch custom event to notify calendar
+    window.dispatchEvent(new CustomEvent('tasksUpdated'))
+  }, [items])
+
+  // Handle date filtering when selectedDate changes
+  useEffect(() => {
+    setFilteredByDate(!!selectedDate)
   }, [items])
 
   const generateId = () => Date.now().toString()
@@ -61,6 +69,13 @@ const MainFeature = ({ activeTab }) => {
     setFormData(getFormFields())
     setEditingItem(null)
     setShowForm(true)
+    
+    // Pre-fill date if a date is selected from calendar
+    if (selectedDate && activeTab === 'tasks') {
+      setFormData(prev => ({
+        ...prev,
+        dueDate: format(selectedDate, 'yyyy-MM-dd')
+      }))
   }
 
   const handleEdit = (item) => {
@@ -118,6 +133,30 @@ const MainFeature = ({ activeTab }) => {
       )
     }))
     toast.success(`Task ${newStatus}!`)
+  }
+
+  const getDeadlineStatus = (dueDate) => {
+    if (!dueDate) return null
+    
+    const taskDate = startOfDay(new Date(dueDate))
+    const today = startOfDay(new Date())
+    
+    if (isPast(taskDate) && !isSameDay(taskDate, today)) {
+      return 'overdue'
+    } else if (isToday(taskDate)) {
+      return 'today'
+    } else {
+      return 'upcoming'
+    }
+  }
+
+  const getDeadlineColor = (status) => {
+    switch (status) {
+      case 'overdue': return 'text-red-600 bg-red-50 border-red-200'
+      case 'today': return 'text-orange-600 bg-orange-50 border-orange-200'
+      case 'upcoming': return 'text-blue-600 bg-blue-50 border-blue-200'
+      default: return 'text-surface-600 bg-surface-100 border-surface-200'
+    }
   }
 
   const getStatusColor = (status) => {
@@ -205,8 +244,27 @@ const MainFeature = ({ activeTab }) => {
               <input
                 type="date"
                 value={formData.dueDate || ''}
-                onChange={(e) => setFormData({ ...formData, dueDate: e.target.value })}
+                onChange={(e) => {
+                  setFormData({ ...formData, dueDate: e.target.value })
+                  // Update selected date when user changes date in form
+                  if (e.target.value) {
+                    setSelectedDate(new Date(e.target.value))
+                  }
+                }}
                 className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700"
+                placeholder="Select due date"
+              />
+              {selectedDate && (
+                <div className="flex items-center justify-between text-sm text-surface-600 dark:text-surface-400 bg-surface-50 dark:bg-surface-700/50 rounded-lg p-2">
+                  <span>Selected: {format(selectedDate, 'MMM dd, yyyy')}</span>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDate(null)}
+                    className="text-surface-400 hover:text-surface-600"
+                  >
+                    <ApperIcon name="X" className="h-3 w-3" />
+                  </button>
+                </div>
               />
             </>
           )}
@@ -340,10 +398,20 @@ const MainFeature = ({ activeTab }) => {
           </span>
         </div>
         {task.dueDate && (
-          <div className="flex items-center space-x-1 text-surface-500">
+          <div className={`flex items-center space-x-2`}>
+            <span className={`px-2 py-1 rounded-full text-xs border ${getDeadlineColor(getDeadlineStatus(task.dueDate))}`}>
+              {getDeadlineStatus(task.dueDate) === 'overdue' && 'Overdue'}
+              {getDeadlineStatus(task.dueDate) === 'today' && 'Due Today'}
+              {getDeadlineStatus(task.dueDate) === 'upcoming' && 'Upcoming'}
+              {!getDeadlineStatus(task.dueDate) && 'Scheduled'}
+            </span>
+            <div className="flex items-center space-x-1 text-surface-500">
             <ApperIcon name="Calendar" className="h-3 w-3" />
             <span>{format(new Date(task.dueDate), 'MMM dd')}</span>
           </div>
+          </div>
+        )}
+      </div>
         )}
       </div>
     </motion.div>
@@ -446,7 +514,22 @@ const MainFeature = ({ activeTab }) => {
     </motion.div>
   )
 
-  const currentItems = items[activeTab] || []
+  // Filter items based on selected date (only for tasks)
+  const getCurrentItems = () => {
+    const allItems = items[activeTab] || []
+    
+    if (activeTab === 'tasks' && selectedDate) {
+      return allItems.filter(task => 
+        task.dueDate && isSameDay(new Date(task.dueDate), selectedDate)
+      )
+    }
+    
+    return allItems
+  }
+
+  const currentItems = getCurrentItems()
+  const totalItems = items[activeTab]?.length || 0
+  const isFiltered = activeTab === 'tasks' && selectedDate
 
   return (
     <div className="space-y-6">
@@ -454,12 +537,33 @@ const MainFeature = ({ activeTab }) => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-surface-900 dark:text-surface-100">
-            {currentItems.length} {activeTab}
+            {isFiltered ? `${currentItems.length} of ${totalItems}` : currentItems.length} {activeTab}
+            {isFiltered && (
+              <span className="text-sm font-normal text-surface-500 ml-2">
+                for {format(selectedDate, 'MMM dd, yyyy')}
+              </span>
+            )}
           </h2>
           <p className="text-surface-600 dark:text-surface-400">
-            {currentItems.length === 0 ? `Create your first ${activeTab.slice(0, -1)} to get started` : `Manage your ${activeTab} efficiently`}
+            {isFiltered 
+              ? `Tasks due on ${format(selectedDate, 'MMM dd, yyyy')}` 
+              : currentItems.length === 0 
+                ? `Create your first ${activeTab.slice(0, -1)} to get started` 
+                : `Manage your ${activeTab} efficiently`
+            }
           </p>
         </div>
+        
+        <div className="flex items-center space-x-3">
+          {isFiltered && (
+            <button
+              onClick={() => setSelectedDate(null)}
+              className="flex items-center space-x-2 px-4 py-2 text-surface-600 hover:text-surface-800 bg-surface-100 hover:bg-surface-200 rounded-lg transition-colors"
+            >
+              <ApperIcon name="X" className="h-4 w-4" />
+              <span className="text-sm">Clear Filter</span>
+            </button>
+          )}
         
         <motion.button
           onClick={handleCreate}
