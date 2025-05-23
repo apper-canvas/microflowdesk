@@ -76,9 +76,9 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
         ...prev,
         dueDate: format(selectedDate, 'yyyy-MM-dd')
       }))
+    }
   }
 
-  }
 
   const handleEdit = (item) => {
     setFormData({ ...item })
