@@ -581,8 +581,8 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
       const filteredTasks = allItems.filter(task => 
         task.dueDate && isSameDay(new Date(task.dueDate), selectedDate)
       )
-      // Only return parent tasks when filtering by date, subtasks will be rendered within parents
-      return filteredTasks.filter(task => !task.parentTaskId)
+      // When filtering by date, show both parent tasks and their subtasks that match the date
+      return filteredTasks
     }
     
     if (activeTab === 'tasks') {
