@@ -78,6 +78,8 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
       }))
   }
 
+  }
+
   const handleEdit = (item) => {
     setFormData({ ...item })
     setEditingItem(item)
@@ -265,7 +267,6 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
                     <ApperIcon name="X" className="h-3 w-3" />
                   </button>
                 </div>
-              />
             </>
           )}
 
@@ -410,9 +411,6 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
             <span>{format(new Date(task.dueDate), 'MMM dd')}</span>
           </div>
           </div>
-        )}
-      </div>
-        )}
       </div>
     </motion.div>
   )
