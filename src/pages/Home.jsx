@@ -3,7 +3,6 @@ import { motion, AnimatePresence } from 'framer-motion'
 import ApperIcon from '../components/ApperIcon'
 import MainFeature from '../components/MainFeature'
 import CalendarWidget from '../components/CalendarWidget'
-import CalendarWidget from '../components/CalendarWidget'
 
 const Home = ({ darkMode, toggleDarkMode, selectedDate, setSelectedDate }) => {
   const [activeTab, setActiveTab] = useState('tasks')
@@ -11,7 +10,7 @@ const Home = ({ darkMode, toggleDarkMode, selectedDate, setSelectedDate }) => {
 
   const tabs = [
     { id: 'tasks', label: 'Tasks', icon: 'CheckSquare' },
-    { id: 'projects', name: 'Projects', icon: 'FolderOpen' },
+    { id: 'projects', label: 'Projects', icon: 'FolderOpen' },
     { id: 'notes', label: 'Notes', icon: 'FileText' }
   ]
 
@@ -94,13 +93,6 @@ const Home = ({ darkMode, toggleDarkMode, selectedDate, setSelectedDate }) => {
             className="w-full flex items-center space-x-3 px-3 py-3 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-700 transition-all duration-200"
           >
             <ApperIcon 
-        {/* Calendar Widget */}
-        <CalendarWidget 
-          sidebarCollapsed={sidebarCollapsed}
-          selectedDate={selectedDate}
-          setSelectedDate={setSelectedDate}
-        />
-
               name={darkMode ? "Sun" : "Moon"} 
               className="h-5 w-5 text-surface-600 dark:text-surface-400" 
             />
