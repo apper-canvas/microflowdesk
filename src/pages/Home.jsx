@@ -7,6 +7,7 @@ const Home = ({ darkMode, toggleDarkMode }) => {
   const [activeTab, setActiveTab] = useState('tasks')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
   const [showCollabSidebar, setShowCollabSidebar] = useState(false)
+  const [teamSectionCollapsed, setTeamSectionCollapsed] = useState(false)
   const [collaborationData, setCollaborationData] = useState({
     teamMembers: [],
     sharedWorkspaces: [],
@@ -94,87 +95,6 @@ const Home = ({ darkMode, toggleDarkMode }) => {
             {/* Collaboration Content */}
             <div className="flex-1 overflow-y-auto p-4 space-y-6">
               {/* Current User */}
-      {/* Sidebar */}
-      <motion.div 
-        className={`${sidebarCollapsed ? 'w-16' : 'w-64'} bg-white/80 dark:bg-surface-800/80 backdrop-blur-xl border-r border-surface-200 dark:border-surface-700 flex flex-col transition-all duration-300 relative z-10`}
-        initial={{ x: -100, opacity: 0 }}
-        animate={{ x: 0, opacity: 1 }}
-        transition={{ duration: 0.5 }}
-      >
-        {/* Header */}
-        <div className="p-4 border-b border-surface-200 dark:border-surface-700">
-          <div className="flex items-center justify-between">
-            {!sidebarCollapsed && (
-              <motion.div 
-                className="flex items-center space-x-2"
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 1 }}
-                transition={{ delay: 0.2 }}
-              >
-                <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-dark rounded-lg flex items-center justify-center">
-                  <ApperIcon name="Zap" className="h-5 w-5 text-white" />
-                </div>
-                <h1 className="text-xl font-bold bg-gradient-to-r from-primary to-primary-dark bg-clip-text text-transparent">
-                  FlowDesk
-                </h1>
-              </motion.div>
-            )}
-            <button
-              onClick={() => setSidebarCollapsed(!sidebarCollapsed)}
-              className="p-2 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700 transition-colors"
-            >
-              <ApperIcon name={sidebarCollapsed ? "ChevronRight" : "ChevronLeft"} className="h-4 w-4" />
-            </button>
-          </div>
-        </div>
-
-        {/* Navigation */}
-        <nav className="flex-1 p-4">
-          <div className="space-y-2">
-            {tabs.map((tab) => (
-              <motion.button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`w-full flex items-center space-x-3 px-3 py-3 rounded-xl transition-all duration-200 ${
-                  activeTab === tab.id 
-                    ? 'bg-gradient-to-r from-primary/10 to-primary-light/10 text-primary border border-primary/20 shadow-soft' 
-                    : 'hover:bg-surface-100 dark:hover:bg-surface-700'
-                }`}
-                whileHover={{ scale: 1.02 }}
-                whileTap={{ scale: 0.98 }}
-              >
-                <ApperIcon 
-                  name={tab.icon} 
-                  className={`h-5 w-5 ${activeTab === tab.id ? 'text-primary' : 'text-surface-600 dark:text-surface-400'}`} 
-                />
-                {!sidebarCollapsed && (
-                  <span className={`font-medium ${activeTab === tab.id ? 'text-primary' : ''}`}>
-                    {tab.label}
-                  </span>
-                )}
-              </motion.button>
-            ))}
-          </div>
-        </nav>
-
-        {/* Theme Toggle */}
-        <div className="p-4 border-t border-surface-200 dark:border-surface-700">
-          <button
-            onClick={toggleDarkMode}
-            className="w-full flex items-center space-x-3 px-3 py-3 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-700 transition-all duration-200"
-          >
-            <ApperIcon 
-              name={darkMode ? "Sun" : "Moon"} 
-              className="h-5 w-5 text-surface-600 dark:text-surface-400" 
-            />
-            {!sidebarCollapsed && (
-              <span className="font-medium text-surface-700 dark:text-surface-300">
-                {darkMode ? 'Light Mode' : 'Dark Mode'}
-              </span>
-            )}
-          </button>
-        </div>
-      </motion.div>
               <div>
                 <h3 className="text-sm font-medium text-surface-700 dark:text-surface-300 mb-3">Your Profile</h3>
                 <div className="flex items-center space-x-3 p-3 bg-primary/5 border border-primary/20 rounded-xl">
@@ -353,31 +273,85 @@ const Home = ({ darkMode, toggleDarkMode }) => {
           </div>
         </nav>
 
-        {/* Collaboration & Theme Toggle */}
-        <div className="p-4 border-t border-surface-200 dark:border-surface-700 space-y-2">
-          <button
-            onClick={() => setShowCollabSidebar(!showCollabSidebar)}
-            className="w-full flex items-center space-x-3 px-3 py-3 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-700 transition-all duration-200"
-          >
-            <ApperIcon 
-              name="Users" 
-              className="h-5 w-5 text-surface-600 dark:text-surface-400" 
-            />
-            {!sidebarCollapsed && (
-              <span className="font-medium text-surface-700 dark:text-surface-300">
-                Team
-              </span>
-            )}
-            {!sidebarCollapsed && collaborationData.teamMembers.filter(m => m.isOnline).length > 0 && (
-              <div className="ml-auto flex items-center">
-                <div className="w-2 h-2 bg-green-500 rounded-full online-indicator"></div>
-                <span className="ml-1 text-xs text-surface-500">
-                  {collaborationData.teamMembers.filter(m => m.isOnline).length}
-                </span>
+        {/* Private Section */}
+        {!sidebarCollapsed && (
+          <div className="p-4 border-t border-surface-200 dark:border-surface-700">
+            <div className="mb-3">
+              <h3 className="text-xs font-semibold text-surface-500 dark:text-surface-400 uppercase tracking-wide">
+                Private
+              </h3>
+            </div>
+            <div className="flex items-center space-x-3 p-3 bg-surface-50 dark:bg-surface-700/50 rounded-xl">
+              <div className="relative">
+                <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-dark rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm font-medium">
+                    {currentUser.name.charAt(0)}
+                  </span>
+                </div>
+                <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-surface-800 online-indicator"></div>
               </div>
-            )}
-          </button>
-          
+              <div className="flex-1">
+                <div className="font-medium text-surface-900 dark:text-surface-100 text-sm">
+                  {currentUser.name}
+                </div>
+                <div className="text-xs text-surface-500">Online</div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Team Collaboration Section */}
+        {!sidebarCollapsed && (
+          <div className="border-t border-surface-200 dark:border-surface-700">
+            <button
+              onClick={() => setTeamSectionCollapsed(!teamSectionCollapsed)}
+              className="w-full p-4 flex items-center justify-between hover:bg-surface-50 dark:hover:bg-surface-700/50 transition-colors"
+            >
+              <div className="flex items-center space-x-2">
+                <h3 className="text-xs font-semibold text-surface-500 dark:text-surface-400 uppercase tracking-wide">
+                  Team Collaboration
+                </h3>
+                <div className="flex items-center space-x-1">
+                  <span className="text-xs text-surface-400">
+                    ({collaborationData.teamMembers.length})
+                  </span>
+                  {collaborationData.teamMembers.filter(m => m.isOnline).length > 0 && (
+                    <div className="flex items-center space-x-1">
+                      <div className="w-2 h-2 bg-green-500 rounded-full online-indicator"></div>
+                      <span className="text-xs text-green-600 dark:text-green-400">
+                        {collaborationData.teamMembers.filter(m => m.isOnline).length} online
+                      </span>
+                    </div>
+                  )}
+                </div>
+              </div>
+              <ApperIcon 
+                name={teamSectionCollapsed ? "ChevronDown" : "ChevronUp"} 
+                className="h-4 w-4 text-surface-400 transition-transform duration-200" 
+              />
+            </button>
+            
+            <div className={`transition-all duration-300 ease-in-out overflow-hidden ${teamSectionCollapsed ? 'max-h-0' : 'max-h-96'}`}>
+              <div className="px-4 pb-4 space-y-2">
+                <button
+                  onClick={() => setShowCollabSidebar(!showCollabSidebar)}
+                  className="w-full flex items-center space-x-3 px-3 py-2 rounded-lg hover:bg-surface-100 dark:hover:bg-surface-700 transition-all duration-200 text-sm"
+                >
+                  <ApperIcon 
+                    name="Users" 
+                    className="h-4 w-4 text-surface-600 dark:text-surface-400" 
+                  />
+                  <span className="font-medium text-surface-700 dark:text-surface-300">
+                    Open Team Panel
+                  </span>
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* Theme Toggle */}
+        <div className="p-4 border-t border-surface-200 dark:border-surface-700">
           <button
             onClick={toggleDarkMode}
             className="w-full flex items-center space-x-3 px-3 py-3 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-700 transition-all duration-200"
@@ -443,6 +417,15 @@ const Home = ({ darkMode, toggleDarkMode }) => {
         </main>
       </div>
     </div>
+  )
+}
+
+export default Home
+                </span>
+              )}
+            )}
+          </button>
+                </span>
   )
 }
 
