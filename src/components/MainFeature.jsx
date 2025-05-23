@@ -835,12 +835,6 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   const renderProjectCard = (project) => (
     <motion.div
       key={project.id}
-      className={`bg-white dark:bg-surface-800 rounded-xl p-6 shadow-card hover:shadow-soft transition-all duration-200 border border-surface-200 dark:border-surface-700 ${
-        getCollaborators(project.id, 'projects').length > 0 ? 'ring-2 ring-primary/10' : ''
-      }`}
-      initial={{ opacity: 0, y: 20 }}
-      animate={{ opacity: 1, y: 0 }}
-      key={project.id}
       className="bg-white dark:bg-surface-800 rounded-xl p-6 shadow-card hover:shadow-soft transition-all duration-200 border border-surface-200 dark:border-surface-700"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -858,8 +852,6 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
                 </span>
               </div>
             )}
-            <span className={`px-2 py-1 rounded-full text-xs border ${project.category === 'work' ? 'text-blue-600 bg-blue-50 border-blue-200' : project.category === 'personal' ? 'text-green-600 bg-green-50 border-green-200' : 'text-purple-600 bg-purple-50 border-purple-200'}`}>
-            <h3 className="font-semibold text-lg">{project.name}</h3>
             <span className={`px-2 py-1 rounded-full text-xs border ${project.category === 'work' ? 'text-blue-600 bg-blue-50 border-blue-200' : project.category === 'personal' ? 'text-green-600 bg-green-50 border-green-200' : 'text-purple-600 bg-purple-50 border-purple-200'}`}>
               {project.category}
             </span>
@@ -880,8 +872,6 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
             <ApperIcon name="Share2" className="h-4 w-4" />
           </button>
           <button
-            onClick={() => handleProjectSelect(project)}
-            className="p-2 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors"
             onClick={() => handleProjectSelect(project)}
             className="p-2 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors"
             title="Select Project"
@@ -924,10 +914,6 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     return (
     <motion.div
       key={workspace.id}
-
-    return (
-    <motion.div
-      key={workspace.id}
       className="bg-white dark:bg-surface-800 rounded-xl p-6 shadow-card hover:shadow-soft transition-all duration-200 border border-surface-200 dark:border-surface-700"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -935,7 +921,6 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     >
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
-          <h3 className="font-semibold text-lg">{workspace.name}</h3>
           <div className="flex items-center space-x-2 mb-2">
             <h3 className="font-semibold text-lg">{workspace.name}</h3>
             {collaborators.length > 0 && (
@@ -953,7 +938,6 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
           {workspace.description && (
             <p className="text-surface-600 dark:text-surface-400 text-sm mb-3">{workspace.description}</p>
           )}
-          <div className="flex items-center space-x-4 text-sm text-surface-500">
           )}
           <div className="flex items-center space-x-4 text-sm text-surface-500">
             <span>{taskCount} task(s)</span>
