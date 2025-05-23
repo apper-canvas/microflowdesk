@@ -73,7 +73,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     // Pre-fill date if a date is selected from calendar
     if (selectedDate && activeTab === 'tasks') {
       setFormData(prev => ({
-        ...prev,
+        ...getFormFields(),
         dueDate: format(selectedDate, 'yyyy-MM-dd')
       }))
     }
@@ -575,7 +575,6 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
           <span className="hidden sm:inline">Create {activeTab.slice(0, -1)}</span>
           <span className="sm:hidden">Create</span>
         </motion.button>
-      </div>
       </div>
 
       {/* Items Grid */}
