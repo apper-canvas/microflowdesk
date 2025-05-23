@@ -9,12 +9,15 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   const [items, setItems] = useState({
     tasks: [],
     projects: [],
+    workspaces: [],
     notes: []
   })
   
   const [showForm, setShowForm] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
   const [formData, setFormData] = useState({})
+  const [selectedProject, setSelectedProject] = useState(null)
+  const [selectedWorkspace, setSelectedWorkspace] = useState(null)
 
   // Load data from localStorage on component mount
   useEffect(() => {
@@ -42,6 +45,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     switch (activeTab) {
       case 'tasks':
         return {
+          workspaceId: selectedWorkspace?.id || '',
           parentTaskId: '',
           title: '',
           description: '',
@@ -53,7 +57,14 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
         return {
           name: '',
           description: '',
-          status: 'active'
+          status: 'active',
+          category: 'personal'
+        }
+      case 'workspaces':
+        return {
+          name: '',
+          description: '',
+          projectId: selectedProject?.id || ''
         }
       case 'notes':
         return {
@@ -73,6 +84,18 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   const getSubtasks = (parentId) => {
     return items.tasks.filter(task => task.parentTaskId === parentId)
       .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+  }
+
+  const getProjectWorkspaces = (projectId) => {
+    return items.workspaces.filter(workspace => workspace.projectId === projectId)
+  }
+
+  const getWorkspaceTasks = (workspaceId) => {
+    return items.tasks.filter(task => task.workspaceId === workspaceId && !task.parentTaskId)
+  }
+
+  const getWorkspaceNotes = (workspaceId) => {
+    return items.notes.filter(note => note.workspaceId === workspaceId)
   }
 
   const handleCreate = () => {
@@ -128,6 +151,11 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
         : [...prev[activeTab], newItem]
     }))
 
+    // Clear workspace selection if deleting the selected workspace
+    if (activeTab === 'workspaces' && selectedWorkspace?.id === newItem.id) {
+      setSelectedWorkspace(null)
+    }
+
     toast.success(editingItem ? `${activeTab.slice(0, -1)} updated successfully!` : `${activeTab.slice(0, -1)} created successfully!`)
     setShowForm(false)
     setFormData({})
@@ -141,11 +169,42 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
         if (activeTab === 'tasks') {
           // Also delete any subtasks of the deleted task
           return item.id !== id && item.parentTaskId !== id
+        } else if (activeTab === 'projects') {
+          // Also delete workspaces in the project
+          if (item.id === id) {
+            // Delete workspaces associated with this project
+            const workspacesToDelete = prev.workspaces.filter(ws => ws.projectId === id)
+            workspacesToDelete.forEach(ws => {
+              // Delete tasks and notes in these workspaces
+              prev.tasks = prev.tasks.filter(task => task.workspaceId !== ws.id)
+              prev.notes = prev.notes.filter(note => note.workspaceId !== ws.id)
+            })
+            prev.workspaces = prev.workspaces.filter(ws => ws.projectId !== id)
+            return false
+          }
+        } else if (activeTab === 'workspaces') {
+          // Also delete tasks and notes in the workspace
+          if (item.id === id) {
+            prev.tasks = prev.tasks.filter(task => task.workspaceId !== id)
+            prev.notes = prev.notes.filter(note => note.workspaceId !== id)
+            return false
+          }
         }
         return item.id !== id
       })
     }))
     toast.success(`${activeTab.slice(0, -1)} and any subtasks deleted successfully!`)
+  }
+
+  const handleProjectSelect = (project) => {
+    setSelectedProject(project)
+    setSelectedWorkspace(null)
+    toast.info(`Selected project: ${project.name}`)
+  }
+
+  const handleWorkspaceSelect = (workspace) => {
+    setSelectedWorkspace(workspace)
+    toast.info(`Selected workspace: ${workspace.name}`)
   }
 
   const toggleTaskStatus = (task) => {
@@ -231,6 +290,20 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           {activeTab === 'tasks' && (
             <>
+              {items.workspaces.length > 0 && (
+                <select
+                  value={formData.workspaceId || ''}
+                  onChange={(e) => setFormData({ ...formData, workspaceId: e.target.value })}
+                  className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700"
+                >
+                  <option value="">Select workspace (optional)</option>
+                  {items.workspaces.map(workspace => (
+                    <option key={workspace.id} value={workspace.id}>
+                      {workspace.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               {getParentTasks().length > 0 && (
                 <select
                   value={formData.parentTaskId || ''}
@@ -324,6 +397,17 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
                 className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700 h-24"
               />
               <select
+                value={formData.category || 'personal'}
+                onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700"
+              >
+                <option value="personal">Personal</option>
+                <option value="work">Work</option>
+                <option value="education">Education</option>
+                <option value="hobby">Hobby</option>
+                <option value="other">Other</option>
+              </select>
+              <select
                 value={formData.status || 'active'}
                 onChange={(e) => setFormData({ ...formData, status: e.target.value })}
                 className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700"
@@ -335,8 +419,56 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
             </>
           )}
 
+          {activeTab === 'workspaces' && (
+            <>
+              {items.projects.length > 0 && (
+                <select
+                  value={formData.projectId || ''}
+                  onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
+                  className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700"
+                  required
+                >
+                  <option value="">Select project</option>
+                  {items.projects.map(project => (
+                    <option key={project.id} value={project.id}>
+                      {project.name}
+                    </option>
+                  ))}
+                </select>
+              )}
+              <input
+                type="text"
+                placeholder="Workspace name"
+                value={formData.name || ''}
+                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700"
+                required
+              />
+              <textarea
+                placeholder="Workspace description"
+                value={formData.description || ''}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
+                className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700 h-24"
+              />
+            </>
+          )}
+
           {activeTab === 'notes' && (
             <>
+              {items.workspaces.length > 0 && (
+                <select
+                  value={formData.workspaceId || ''}
+                  onChange={(e) => setFormData({ ...formData, workspaceId: e.target.value })}
+                  className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700"
+                >
+                  <option value="">Select workspace (optional)</option>
+                  {items.workspaces.map(workspace => (
+                    <option key={workspace.id} value={workspace.id}>
+                      {workspace.name}
+                    </option>
+                  ))}
+                </select>
+              )}
               <input
                 type="text"
                 placeholder="Note title"
@@ -486,12 +618,27 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     >
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
-          <h3 className="font-semibold text-lg">{project.name}</h3>
+          <div className="flex items-center space-x-2 mb-2">
+            <h3 className="font-semibold text-lg">{project.name}</h3>
+            <span className={`px-2 py-1 rounded-full text-xs border ${project.category === 'work' ? 'text-blue-600 bg-blue-50 border-blue-200' : project.category === 'personal' ? 'text-green-600 bg-green-50 border-green-200' : 'text-purple-600 bg-purple-50 border-purple-200'}`}>
+              {project.category}
+            </span>
+          </div>
           {project.description && (
-            <p className="text-surface-600 dark:text-surface-400 text-sm mt-1">{project.description}</p>
+            <p className="text-surface-600 dark:text-surface-400 text-sm mb-3">{project.description}</p>
           )}
+          <div className="text-sm text-surface-500">
+            {getProjectWorkspaces(project.id).length} workspace(s)
+          </div>
         </div>
         <div className="flex items-center space-x-2">
+          <button
+            onClick={() => handleProjectSelect(project)}
+            className="p-2 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors"
+            title="Select Project"
+          >
+            <ApperIcon name="FolderOpen" className="h-4 w-4" />
+          </button>
           <button
             onClick={() => handleEdit(project)}
             className="p-2 hover:bg-surface-100 dark:hover:bg-surface-700 rounded-lg transition-colors"
@@ -518,6 +665,66 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
       </div>
     </motion.div>
   )
+
+  const renderWorkspaceCard = (workspace) => {
+    const project = items.projects.find(p => p.id === workspace.projectId)
+    const taskCount = getWorkspaceTasks(workspace.id).length
+    const noteCount = getWorkspaceNotes(workspace.id).length
+
+    return (
+    <motion.div
+      key={workspace.id}
+      className="bg-white dark:bg-surface-800 rounded-xl p-6 shadow-card hover:shadow-soft transition-all duration-200 border border-surface-200 dark:border-surface-700"
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      whileHover={{ y: -2 }}
+    >
+      <div className="flex items-start justify-between mb-4">
+        <div className="flex-1">
+          <h3 className="font-semibold text-lg">{workspace.name}</h3>
+          {project && (
+            <p className="text-primary text-sm font-medium mb-1">in {project.name}</p>
+          )}
+          {workspace.description && (
+            <p className="text-surface-600 dark:text-surface-400 text-sm mb-3">{workspace.description}</p>
+          )}
+          <div className="flex items-center space-x-4 text-sm text-surface-500">
+            <span>{taskCount} task(s)</span>
+            <span>{noteCount} note(s)</span>
+          </div>
+        </div>
+        <div className="flex items-center space-x-2">
+          <button
+            onClick={() => handleWorkspaceSelect(workspace)}
+            className="p-2 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors"
+            title="Select Workspace"
+          >
+            <ApperIcon name="Layers" className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => handleEdit(workspace)}
+            className="p-2 hover:bg-surface-100 dark:hover:bg-surface-700 rounded-lg transition-colors"
+          >
+            <ApperIcon name="Edit3" className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => handleDelete(workspace.id)}
+            className="p-2 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
+          >
+            <ApperIcon name="Trash2" className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+      
+      <div className="flex items-center justify-end">
+        <div className="flex items-center space-x-1 text-surface-500 text-sm">
+          <ApperIcon name="Calendar" className="h-3 w-3" />
+          <span>{format(new Date(workspace.createdAt), 'MMM dd, yyyy')}</span>
+        </div>
+      </div>
+    </motion.div>
+    )
+  }
 
   const renderNoteCard = (note) => (
     <motion.div
@@ -577,6 +784,11 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   const getCurrentItems = () => {
     const allItems = items[activeTab] || []
     
+    // Filter by workspace if one is selected
+    if (selectedWorkspace && (activeTab === 'tasks' || activeTab === 'notes')) {
+      return allItems.filter(item => item.workspaceId === selectedWorkspace.id)
+    }
+    
     if (activeTab === 'tasks' && selectedDate) {
       const filteredTasks = allItems.filter(task => 
         task.dueDate && isSameDay(new Date(task.dueDate), selectedDate)
@@ -597,23 +809,72 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   const totalItems = items[activeTab]?.length || 0
   const totalParentTasks = activeTab === 'tasks' ? items.tasks.filter(task => !task.parentTaskId).length : totalItems
   const isFiltered = activeTab === 'tasks' && selectedDate
+  const isWorkspaceFiltered = selectedWorkspace && (activeTab === 'tasks' || activeTab === 'notes')
 
   return (
     <div className="space-y-6">
+      {/* Workspace/Project Selection */}
+      {(selectedProject || selectedWorkspace) && (
+        <div className="flex items-center space-x-4 p-4 bg-primary/5 border border-primary/20 rounded-xl">
+          <div className="flex items-center space-x-2">
+            {selectedProject && (
+              <>
+                <ApperIcon name="FolderOpen" className="h-4 w-4 text-primary" />
+                <span className="text-sm font-medium text-primary">Project: {selectedProject.name}</span>
+              </>
+            )}
+            {selectedWorkspace && (
+              <>
+                <ApperIcon name="Layers" className="h-4 w-4 text-primary ml-4" />
+                <span className="text-sm font-medium text-primary">Workspace: {selectedWorkspace.name}</span>
+              </>
+            )}
+          </div>
+          <div className="flex space-x-2">
+            {selectedWorkspace && (
+              <button
+                onClick={() => setSelectedWorkspace(null)}
+                className="px-3 py-1 text-xs bg-surface-200 hover:bg-surface-300 rounded-lg transition-colors"
+              >
+                Clear Workspace
+              </button>
+            )}
+            {selectedProject && (
+              <button
+                onClick={() => {
+                  setSelectedProject(null)
+                  setSelectedWorkspace(null)
+                }}
+                className="px-3 py-1 text-xs bg-surface-200 hover:bg-surface-300 rounded-lg transition-colors"
+              >
+                Clear Project
+              </button>
+            )}
+          </div>
+        </div>
+      )}
+
       {/* Header with Create Button */}
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-surface-900 dark:text-surface-100">
-            {isFiltered ? `${currentItems.length} of ${totalParentTasks}` : currentItems.length} {activeTab === 'tasks' ? 'tasks' : activeTab}
+            {isFiltered ? `${currentItems.length} of ${totalParentTasks}` : currentItems.length} {activeTab}
             {isFiltered && (
               <span className="text-sm font-normal text-surface-500 ml-2">
                 for {format(selectedDate, 'MMM dd, yyyy')}
+              </span>
+            )}
+            {isWorkspaceFiltered && (
+              <span className="text-sm font-normal text-surface-500 ml-2">
+                in {selectedWorkspace.name}
               </span>
             )}
           </h2>
           <p className="text-surface-600 dark:text-surface-400">
             {isFiltered 
               ? `Tasks due on ${format(selectedDate, 'MMM dd, yyyy')}` 
+              : isWorkspaceFiltered
+                ? `${activeTab} in ${selectedWorkspace.name} workspace`
               : currentItems.length === 0 
                 ? `Create your first ${activeTab.slice(0, -1)} to get started` 
                 : `Manage your ${activeTab} efficiently`
@@ -630,6 +891,24 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
               <ApperIcon name="X" className="h-4 w-4" />
               <span className="text-sm">Clear Filter</span>
             </button>
+          )}
+          
+          {/* Create workspace button for projects tab */}
+          {activeTab === 'projects' && selectedProject && (
+            <motion.button
+              onClick={() => {
+                setActiveTab('workspaces')
+                setFormData({ ...getFormFields(), projectId: selectedProject.id })
+                setEditingItem(null)
+                setShowForm(true)
+              }}
+              className="flex items-center space-x-2 bg-gradient-to-r from-secondary to-secondary-dark text-white px-4 py-2 rounded-xl font-medium shadow-card hover:shadow-soft transform hover:scale-105 transition-all duration-200"
+              whileHover={{ scale: 1.05 }}
+              whileTap={{ scale: 0.95 }}
+            >
+              <ApperIcon name="Plus" className="h-4 w-4" />
+              <span className="text-sm">Add Workspace</span>
+            </motion.button>
           )}
         
         <motion.button
@@ -650,6 +929,8 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
         <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3">
           {currentItems.map(item => {
             switch (activeTab) {
+              case 'workspaces':
+                return renderWorkspaceCard(item)
               case 'tasks':
                 return renderTaskCard(item)
               case 'projects':
@@ -670,7 +951,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
         >
           <div className="w-24 h-24 bg-surface-100 dark:bg-surface-700 rounded-full flex items-center justify-center mx-auto mb-6">
             <ApperIcon 
-              name={activeTab === 'tasks' ? 'CheckSquare' : activeTab === 'projects' ? 'FolderOpen' : 'FileText'} 
+              name={activeTab === 'tasks' ? 'CheckSquare' : activeTab === 'projects' ? 'FolderOpen' : activeTab === 'workspaces' ? 'Layers' : 'FileText'} 
               className="h-10 w-10 text-surface-400" 
             />
           </div>

@@ -10,6 +10,7 @@ const Home = ({ darkMode, toggleDarkMode }) => {
   const tabs = [
     { id: 'tasks', label: 'Tasks', icon: 'CheckSquare' },
     { id: 'projects', label: 'Projects & Workspaces', icon: 'FolderOpen' },
+    { id: 'workspaces', label: 'Workspaces', icon: 'Layers' },
     { id: 'notes', label: 'Notes', icon: 'FileText' }
   ]
 
