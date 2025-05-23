@@ -421,12 +421,3 @@ const Home = ({ darkMode, toggleDarkMode }) => {
 }
 
 export default Home
-                </span>
-              )}
-            )}
-          </button>
-                </span>
-  )
-}
-
-export default Home
