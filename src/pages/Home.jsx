@@ -2,9 +2,8 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import ApperIcon from '../components/ApperIcon'
 import MainFeature from '../components/MainFeature'
-import CalendarWidget from '../components/CalendarWidget'
 
-const Home = ({ darkMode, toggleDarkMode, selectedDate, setSelectedDate }) => {
+const Home = ({ darkMode, toggleDarkMode }) => {
   const [activeTab, setActiveTab] = useState('tasks')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
 
@@ -79,13 +78,6 @@ const Home = ({ darkMode, toggleDarkMode, selectedDate, setSelectedDate }) => {
           </div>
         </nav>
 
-        {/* Calendar Widget */}
-        <CalendarWidget 
-          sidebarCollapsed={sidebarCollapsed}
-          selectedDate={selectedDate}
-          setSelectedDate={setSelectedDate}
-        />
-
         {/* Theme Toggle */}
         <div className="p-4 border-t border-surface-200 dark:border-surface-700">
           <button
@@ -147,7 +139,7 @@ const Home = ({ darkMode, toggleDarkMode, selectedDate, setSelectedDate }) => {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
             >
-              <MainFeature activeTab={activeTab} selectedDate={selectedDate} setSelectedDate={setSelectedDate} />
+              <MainFeature activeTab={activeTab} />
             </motion.div>
           </AnimatePresence>
         </main>
