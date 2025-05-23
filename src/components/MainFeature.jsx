@@ -34,7 +34,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   // Handle date filtering when selectedDate changes
   useEffect(() => {
     setFilteredByDate(!!selectedDate)
-  }, [items])
+  }, [selectedDate])
 
   const generateId = () => Date.now().toString()
 
@@ -575,6 +575,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
           <span className="hidden sm:inline">Create {activeTab.slice(0, -1)}</span>
           <span className="sm:hidden">Create</span>
         </motion.button>
+        </div>
       </div>
 
       {/* Items Grid */}
