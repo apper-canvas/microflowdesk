@@ -408,10 +408,11 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
               {!getDeadlineStatus(task.dueDate) && 'Scheduled'}
             </span>
             <div className="flex items-center space-x-1 text-surface-500">
-            <ApperIcon name="Calendar" className="h-3 w-3" />
-            <span>{format(new Date(task.dueDate), 'MMM dd')}</span>
+              <ApperIcon name="Calendar" className="h-3 w-3" />
+              <span>{format(new Date(task.dueDate), 'MMM dd')}</span>
+            </div>
           </div>
-          </div>
+        )}
       </div>
     </motion.div>
   )
