@@ -1,4 +1,6 @@
 import { useState, useEffect } from 'react'
+import { useSelector, useDispatch } from 'react-redux'
+import { useNavigate } from 'react-router-dom'
 import { motion, AnimatePresence } from 'framer-motion'
 import ApperIcon from '../components/ApperIcon'
 import MainFeature from '../components/MainFeature'
@@ -6,16 +8,28 @@ import MainFeature from '../components/MainFeature'
 const Home = ({ darkMode, toggleDarkMode }) => {
   const [activeTab, setActiveTab] = useState('tasks')
   const [sidebarCollapsed, setSidebarCollapsed] = useState(false)
+  const [selectedDate, setSelectedDate] = useState(null)
   const [showCollabSidebar, setShowCollabSidebar] = useState(false)
   const [teamSectionCollapsed, setTeamSectionCollapsed] = useState(false)
+  
+  // Get user from Redux and check authentication
+  const { user, isAuthenticated } = useSelector((state) => state.user)
+  const navigate = useNavigate()
+  
   const [collaborationData, setCollaborationData] = useState({
     teamMembers: [],
     sharedWorkspaces: [],
     recentActivity: []
   })
 
-  // Mock current user
-  const currentUser = { id: 'user1', name: 'John Doe', email: 'john@example.com', avatar: null }
+  // Redirect to login if not authenticated
+  useEffect(() => {
+    if (!isAuthenticated) {
+      navigate('/login')
+    }
+  }, [isAuthenticated, navigate])
+
+  const currentUser = user || {}
 
   const tabs = [
     { id: 'tasks', label: 'Tasks', icon: 'CheckSquare' },
@@ -25,44 +39,28 @@ const Home = ({ darkMode, toggleDarkMode }) => {
 
   // Load collaboration data
   useEffect(() => {
-    // Load actual data from localStorage
-    const savedData = localStorage.getItem('flowdesk-data')
-    const actualData = savedData ? JSON.parse(savedData) : { workspaces: [], projects: [], collaborators: [] }
-    
+    if (!isAuthenticated) return;
+
     const mockTeamMembers = [
       { id: 'user2', name: 'Jane Smith', email: 'jane@example.com', avatar: null, isOnline: false, lastSeen: '2 hours ago', role: 'Designer' },
       { id: 'user3', name: 'Mike Johnson', email: 'mike@example.com', avatar: null, isOnline: true, lastSeen: 'now', role: 'Developer' },
       { id: 'user4', name: 'Sarah Wilson', email: 'sarah@example.com', avatar: null, isOnline: false, lastSeen: '1 day ago', role: 'Manager' },
       { id: 'user5', name: 'David Brown', email: 'david@example.com', avatar: null, isOnline: true, lastSeen: 'now', role: 'Analyst' }
-    ]
-
-    // Convert actual workspaces to collaboration format
-    const sharedWorkspaces = actualData.workspaces.map(workspace => {
-      const project = actualData.projects.find(p => p.id === workspace.projectId)
-      const collaborators = actualData.collaborators.filter(c => c.itemId === workspace.id && c.itemType === 'workspaces')
-      const memberCount = collaborators.length + 1 // +1 for owner
-      
-      return {
-        ...workspace,
-        memberCount,
-        lastActivity: workspace.updatedAt ? new Date(workspace.updatedAt).toLocaleString() : 'No recent activity',
-        projectName: project?.name || 'Unknown Project'
-      }
-    })
+    ];
 
     const mockRecentActivity = [
       { id: 1, user: 'Mike Johnson', action: 'completed task', item: 'UI Design Review', time: '5 minutes ago', type: 'task' },
       { id: 2, user: 'Jane Smith', action: 'added note', item: 'Meeting Notes', time: '15 minutes ago', type: 'note' },
       { id: 3, user: 'Sarah Wilson', action: 'created workspace', item: 'Q4 Planning', time: '1 hour ago', type: 'workspace' },
       { id: 4, user: 'David Brown', action: 'shared project', item: 'Analytics Dashboard', time: '2 hours ago', type: 'project' }
-    ]
+    ];
 
     setCollaborationData({
       teamMembers: mockTeamMembers,
-      sharedWorkspaces: sharedWorkspaces,
+      sharedWorkspaces: [],
       recentActivity: mockRecentActivity
     })
-  }, [])
+  }, [isAuthenticated]);
 
   const getActivityIcon = (type) => {
     switch (type) {
@@ -78,6 +76,11 @@ const Home = ({ darkMode, toggleDarkMode }) => {
     setActiveTab('projects')
     // Dispatch event to MainFeature to select this workspace
     window.dispatchEvent(new CustomEvent('selectWorkspace', { detail: workspace }))
+  }
+
+  // Don't render if not authenticated
+  if (!isAuthenticated) {
+    return null;
   }
 
   return (
@@ -119,14 +122,14 @@ const Home = ({ darkMode, toggleDarkMode }) => {
                   <div className="relative">
                     <div className="w-10 h-10 bg-gradient-to-br from-primary to-primary-dark rounded-full flex items-center justify-center">
                       <span className="text-white font-medium">
-                        {currentUser.name.charAt(0)}
+                      {currentUser.firstName?.charAt(0) || currentUser.emailAddress?.charAt(0) || 'U'}
                       </span>
                     </div>
                     <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-surface-800 online-indicator"></div>
                   </div>
                   <div className="flex-1">
                     <div className="font-medium text-surface-900 dark:text-surface-100">
-                      {currentUser.name}
+                    {currentUser.firstName} {currentUser.lastName}
                     </div>
                     <div className="text-sm text-surface-500">Online</div>
                   </div>
@@ -180,7 +183,7 @@ const Home = ({ darkMode, toggleDarkMode }) => {
                       className="w-full p-3 bg-surface-50 dark:bg-surface-700/50 rounded-xl hover:bg-surface-100 dark:hover:bg-surface-600/50 transition-all duration-200 text-left">
                       <div className="flex items-center justify-between mb-1">
                         <div className="font-medium text-surface-900 dark:text-surface-100 text-sm">
-                          {workspace.name}
+                          {workspace.Name}
                         </div>
                         <div className="flex items-center space-x-1 text-xs text-primary">
                           <ApperIcon name="Users" className="h-3 w-3" />
@@ -314,7 +317,7 @@ const Home = ({ darkMode, toggleDarkMode }) => {
               <div className="relative">
                 <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-dark rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-medium">
-                    {currentUser.name.charAt(0)}
+                    {currentUser.firstName?.charAt(0) || currentUser.emailAddress?.charAt(0) || 'U'}
                   </span>
                 </div>
                 <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-surface-800 online-indicator"></div>
@@ -322,7 +325,7 @@ const Home = ({ darkMode, toggleDarkMode }) => {
               <div className="flex-1">
                 <div className="font-medium text-surface-900 dark:text-surface-100 text-sm">
                   {currentUser.name}
-                </div>
+                  {currentUser.firstName} {currentUser.lastName}
                 <div className="text-xs text-surface-500">Online</div>
               </div>
             </div>
@@ -440,7 +443,7 @@ const Home = ({ darkMode, toggleDarkMode }) => {
               exit={{ opacity: 0, y: -20 }}
               transition={{ duration: 0.3 }}
             >
-              <MainFeature activeTab={activeTab} />
+              <MainFeature activeTab={activeTab} selectedDate={selectedDate} setSelectedDate={setSelectedDate} />
             </motion.div>
           </AnimatePresence>
         </main>

@@ -1,27 +1,26 @@
 import { useState, useEffect } from 'react'
+import { useSelector } from 'react-redux'
 import { motion, AnimatePresence } from 'framer-motion'
 import { toast } from 'react-toastify'
 import { format, isSameDay, isToday, isPast, startOfDay } from 'date-fns'
 import ApperIcon from './ApperIcon'
+import UserService from '../services/UserService'
+import ProjectService from '../services/ProjectService'
+import WorkspaceService from '../services/WorkspaceService'
+import TaskService from '../services/TaskService'
+import NoteService from '../services/NoteService'
+import CollaboratorService from '../services/CollaboratorService'
+import ActivityService from '../services/ActivityService'
 
 const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
-  // Mock current user data
-  const [currentUser] = useState({
-    id: 'user1',
-    name: 'John Doe',
-    email: 'john@example.com',
-    avatar: null
-  })
+  // Get current user from Redux
+  const { user: currentUser, isAuthenticated } = useSelector((state) => state.user);
 
   const [filteredByDate, setFilteredByDate] = useState(false)
+  const [loading, setLoading] = useState(false)
+  const [error, setError] = useState(null)
   const [items, setItems] = useState({
-    users: [
-      { id: 'user1', name: 'John Doe', email: 'john@example.com', avatar: null, isOnline: true },
-      { id: 'user2', name: 'Jane Smith', email: 'jane@example.com', avatar: null, isOnline: false },
-      { id: 'user3', name: 'Mike Johnson', email: 'mike@example.com', avatar: null, isOnline: true },
-      { id: 'user4', name: 'Sarah Wilson', email: 'sarah@example.com', avatar: null, isOnline: false },
-      { id: 'user5', name: 'David Brown', email: 'david@example.com', avatar: null, isOnline: true }
-    ],
+    users: [],
     collaborators: [],
     tasks: [],
     projects: [],
@@ -31,6 +30,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   
   const [showForm, setShowForm] = useState(false)
   const [editingItem, setEditingItem] = useState(null)
+  const [formLoading, setFormLoading] = useState(false)
   const [formData, setFormData] = useState({})
   const [selectedProject, setSelectedProject] = useState(null)
   const [selectedWorkspace, setSelectedWorkspace] = useState(null)
@@ -38,20 +38,43 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   const [sharingItem, setSharingItem] = useState(null)
   const [shareEmail, setShareEmail] = useState('')
 
-  // Load data from localStorage on component mount
+  // Load all data on component mount
   useEffect(() => {
-    const savedData = localStorage.getItem('flowdesk-data')
-    if (savedData) {
-      setItems(JSON.parse(savedData))
+    if (isAuthenticated) {
+      loadAllData();
     }
-  }, [])
+  }, [isAuthenticated]);
 
-  // Save data to localStorage whenever items change
-  useEffect(() => {
-    localStorage.setItem('flowdesk-data', JSON.stringify(items))
-    // Dispatch custom event to notify calendar
-    window.dispatchEvent(new CustomEvent('tasksUpdated'))
-  }, [items])
+  const loadAllData = async () => {
+    setLoading(true);
+    setError(null);
+    
+    try {
+      const [users, projects, workspaces, tasks, notes, collaborators] = await Promise.all([
+        UserService.fetchUsers(),
+        ProjectService.fetchProjects(),
+        WorkspaceService.fetchWorkspaces(),
+        TaskService.fetchTasks(),
+        NoteService.fetchNotes(),
+        CollaboratorService.fetchCollaborators()
+      ]);
+
+      setItems({
+        users: users || [],
+        projects: projects || [],
+        workspaces: workspaces || [],
+        tasks: tasks || [],
+        notes: notes || [],
+        collaborators: collaborators || []
+      });
+    } catch (error) {
+      console.error('Error loading data:', error);
+      setError('Failed to load data');
+      toast.error('Failed to load data');
+    } finally {
+      setLoading(false);
+    }
+  };
 
   // Listen for workspace selection from collaboration sidebar
   useEffect(() => {
@@ -68,7 +91,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     setFilteredByDate(!!selectedDate)
   }, [selectedDate])
 
-  const generateId = () => Date.now().toString()
+  const generateTempId = () => Date.now().toString()
 
   const handleShare = (item, type) => {
     setSharingItem({ ...item, type })
@@ -76,7 +99,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     setShareEmail('')
   }
 
-  const handleInviteCollaborator = (e) => {
+  const handleInviteCollaborator = async (e) => {
     e.preventDefault()
     
     if (!shareEmail.trim()) {
@@ -100,35 +123,55 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     )
 
     if (existingCollaborator) {
-      toast.error('User is already a collaborator')
-      return
-    }
-
+    try {
+      const newCollaborator = {
+        Name: `${existingUser.Name} - ${sharingItem.Name || sharingItem.title}`,
+        userId: existingUser.Id,
+        itemId: sharingItem.Id,
     const newCollaborator = {
       id: generateId(),
-      userId: existingUser.id,
-      itemId: sharingItem.id,
-      itemType: sharingItem.type,
+        invitedBy: currentUser.userId,
+        invitedAt: new Date().toISOString()
+      };
       permission: 'editor',
-      invitedBy: currentUser.id,
-      invitedAt: new Date().toISOString()
-    }
-
+      const createdCollaborators = await CollaboratorService.createCollaborators([newCollaborator]);
+      
+      if (createdCollaborators.length > 0) {
+        setItems(prev => ({
+          ...prev,
+          collaborators: [...prev.collaborators, createdCollaborators[0]]
+        }));
     setItems(prev => ({
-      ...prev,
+        toast.success(`${existingUser.Name} has been invited as a collaborator`);
+        
+        // Log activity
+        await ActivityService.logActivity(currentUser.userId, 'shared project', sharingItem.Name || sharingItem.title, sharingItem.type);
+      }
+    } catch (error) {
+      console.error('Error inviting collaborator:', error);
+      toast.error('Failed to invite collaborator');
+    }
       collaborators: [...prev.collaborators, newCollaborator]
     }))
 
-    toast.success(`${existingUser.name} has been invited as a collaborator`)
-    setShareEmail('')
-  }
-
-  const handleRemoveCollaborator = (collaboratorId) => {
-    setItems(prev => ({
+  const handleRemoveCollaborator = async (collaboratorId) => {
+    try {
+      await CollaboratorService.deleteCollaborators([collaboratorId]);
+      
+      setItems(prev => ({
+        ...prev,
+        collaborators: prev.collaborators.filter(collab => collab.Id !== collaboratorId)
+      }));
+      
+      toast.success('Collaborator removed successfully');
+    } catch (error) {
+      console.error('Error removing collaborator:', error);
+      toast.error('Failed to remove collaborator');
+    }
       ...prev,
       collaborators: prev.collaborators.filter(collab => collab.id !== collaboratorId)
     }))
-    toast.success('Collaborator removed successfully')
+    return items.collaborators.filter(collab => collab.itemId === itemId && collab.itemType === itemType);
   }
 
   const getCollaborators = (itemId, itemType) => {
@@ -141,30 +184,31 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
         return {
           workspaceId: selectedWorkspace?.id || '',
           parentTaskId: '',
+          Name: '',
           title: '',
-          description: '',
           priority: 'medium',
           status: 'pending',
           dueDate: ''
         }
       case 'projects':
         return {
-          name: '',
+          Name: '',
           description: '',
           status: 'active',
           category: 'personal'
         }
       case 'workspaces':
         return {
-          name: '',
+          Name: '',
           description: '',
           projectId: selectedProject?.id || ''
         }
       case 'notes':
         return {
+          Name: '',
           title: '',
           content: '',
-          tags: ''
+          Tags: ''
         }
       default:
         return {}
@@ -172,24 +216,24 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   }
 
   const getParentTasks = () => {
-    return items.tasks.filter(task => !task.parentTaskId)
+    return items.tasks.filter(task => !task.parentTaskId);
   }
 
   const getSubtasks = (parentId) => {
     return items.tasks.filter(task => task.parentTaskId === parentId)
-      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+      .sort((a, b) => new Date(a.CreatedOn) - new Date(b.CreatedOn));
   }
 
   const getProjectWorkspaces = (projectId) => {
-    return items.workspaces.filter(workspace => workspace.projectId === projectId)
+    return items.workspaces.filter(workspace => workspace.projectId === projectId);
   }
 
   const getWorkspaceTasks = (workspaceId) => {
-    return items.tasks.filter(task => task.workspaceId === workspaceId && !task.parentTaskId)
+    return items.tasks.filter(task => task.workspaceId === workspaceId && !task.parentTaskId);
   }
 
   const getWorkspaceNotes = (workspaceId) => {
-    return items.notes.filter(note => note.workspaceId === workspaceId)
+    return items.notes.filter(note => note.workspaceId === workspaceId);
   }
 
   const handleCreate = () => {
@@ -217,98 +261,191 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     setFormData({ ...item })
     setEditingItem(item)
     setShowForm(true)
-  }
+  const handleSubmit = async (e) => {
 
   const handleSubmit = (e) => {
-    e.preventDefault()
+    if (!formData.title && !formData.Name) {
     
     if (!formData.title && !formData.name) {
       toast.error('Please enter a title or name')
       return
-    }
+    setFormLoading(true);
+    
+    try {
+      const itemData = {
 
-    const newItem = {
-      ...formData,
-      id: editingItem?.id || generateId(),
-      createdAt: editingItem?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString(),
+        ownerId: currentUser?.userId || ''
+      };
       ownerId: editingItem?.ownerId || currentUser.id
-    }
-
+      // Handle tags for notes
+      if (activeTab === 'notes' && typeof itemData.Tags === 'string') {
+        itemData.Tags = itemData.Tags.split(',').map(tag => tag.trim()).filter(Boolean).join(',');
     if (activeTab === 'notes' && typeof newItem.tags === 'string') {
       newItem.tags = newItem.tags.split(',').map(tag => tag.trim()).filter(Boolean)
-    }
-
-    setItems(prev => ({
-      ...prev,
-      [activeTab]: editingItem 
-        ? prev[activeTab].map(item => item.id === editingItem.id ? newItem : item)
+      let result;
+      if (editingItem) {
+        // Update existing item
+        itemData.Id = editingItem.Id;
+        const service = getServiceForTab(activeTab);
+        result = await service[`update${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}`]([itemData]);
+        
+        if (result.length > 0) {
+          setItems(prev => ({
+            ...prev,
+            [activeTab]: prev[activeTab].map(item => item.Id === editingItem.Id ? result[0] : item)
+          }));
+        }
+      } else {
+        // Create new item
+        const service = getServiceForTab(activeTab);
+        result = await service[`create${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}`]([itemData]);
+        
+        if (result.length > 0) {
+          setItems(prev => ({
+            ...prev,
+            [activeTab]: [...prev[activeTab], result[0]]
+          }));
+          
+          // Log activity
+          await ActivityService.logActivity(
+            currentUser.userId, 
+            editingItem ? `updated ${activeTab.slice(0, -1)}` : `created ${activeTab.slice(0, -1)}`, 
+            itemData.Name || itemData.title, 
+            activeTab.slice(0, -1)
+          );
+        }
+      }
         : [...prev[activeTab], newItem]
-    }))
-
-    // Clear workspace selection if deleting the selected workspace
-    if (activeTab === 'workspaces' && selectedWorkspace?.id === newItem.id) {
-      setSelectedWorkspace(null)
+      toast.success(editingItem ? `${activeTab.slice(0, -1)} updated successfully!` : `${activeTab.slice(0, -1)} created successfully!`);
+      setShowForm(false);
+      setFormData({});
+      setEditingItem(null);
+    } catch (error) {
+      console.error('Error saving item:', error);
+      toast.error('Failed to save item');
+    } finally {
+      setFormLoading(false);
     }
-
-    toast.success(editingItem ? `${activeTab.slice(0, -1)} updated successfully!` : `${activeTab.slice(0, -1)} created successfully!`)
-    setShowForm(false)
+  };
+      setSelectedWorkspace(null)
+  const getServiceForTab = (tab) => {
+    switch (tab) {
+      case 'users':
+        return UserService;
+      case 'projects':
+        return ProjectService;
+      case 'workspaces':
+        return WorkspaceService;
+      case 'tasks':
+        return TaskService;
+      case 'notes':
+        return NoteService;
+      default:
+        throw new Error(`No service found for tab: ${tab}`);
+    }
     setFormData({})
     setEditingItem(null)
-  }
-
-  const handleDelete = (id) => {
-    setItems(prev => ({
-      ...prev,
-      [activeTab]: prev[activeTab].filter(item => {
-        if (activeTab === 'tasks') {
-          // Also delete any subtasks of the deleted task
-          return item.id !== id && item.parentTaskId !== id
-        } else if (activeTab === 'projects') {
-          // Also delete workspaces in the project
-          if (item.id === id) {
-            // Delete workspaces associated with this project
-            const workspacesToDelete = prev.workspaces.filter(ws => ws.projectId === id)
-            workspacesToDelete.forEach(ws => {
-              // Delete tasks and notes in these workspaces
-              prev.tasks = prev.tasks.filter(task => task.workspaceId !== ws.id)
-              prev.notes = prev.notes.filter(note => note.workspaceId !== ws.id)
-            })
-            prev.workspaces = prev.workspaces.filter(ws => ws.projectId !== id)
+  const handleDelete = async (id) => {
+    try {
+      setLoading(true);
+      
+      // Handle cascading deletes
+      if (activeTab === 'tasks') {
+        // Delete subtasks first
+        const subtasks = items.tasks.filter(task => task.parentTaskId === id);
+        if (subtasks.length > 0) {
+          await TaskService.deleteTasks(subtasks.map(task => task.Id));
             return false
+      } else if (activeTab === 'projects') {
+        // Delete workspaces and their tasks/notes
+        const workspacesToDelete = items.workspaces.filter(ws => ws.projectId === id);
+        for (const workspace of workspacesToDelete) {
+          const workspaceTasks = items.tasks.filter(task => task.workspaceId === workspace.Id);
+          const workspaceNotes = items.notes.filter(note => note.workspaceId === workspace.Id);
+          
+          if (workspaceTasks.length > 0) {
+            await TaskService.deleteTasks(workspaceTasks.map(task => task.Id));
           }
-        } else if (activeTab === 'workspaces') {
-          // Also delete tasks and notes in the workspace
-          if (item.id === id) {
-            prev.tasks = prev.tasks.filter(task => task.workspaceId !== id)
-            prev.notes = prev.notes.filter(note => note.workspaceId !== id)
-            return false
+          if (workspaceNotes.length > 0) {
+            await NoteService.deleteNotes(workspaceNotes.map(note => note.Id));
           }
         }
-        return item.id !== id
-      })
+        if (workspacesToDelete.length > 0) {
+          await WorkspaceService.deleteWorkspaces(workspacesToDelete.map(ws => ws.Id));
+        }
+      } else if (activeTab === 'workspaces') {
+        // Delete tasks and notes in workspace
+        const workspaceTasks = items.tasks.filter(task => task.workspaceId === id);
+        const workspaceNotes = items.notes.filter(note => note.workspaceId === id);
+        
+        if (workspaceTasks.length > 0) {
+          await TaskService.deleteTasks(workspaceTasks.map(task => task.Id));
+        }
+        if (workspaceNotes.length > 0) {
+          await NoteService.deleteNotes(workspaceNotes.map(note => note.Id));
+        }
+      }
+      
+      // Delete the main item
+      const service = getServiceForTab(activeTab);
+      await service[`delete${activeTab.charAt(0).toUpperCase() + activeTab.slice(1)}`]([id]);
+      
+      // Reload all data to ensure consistency
+      await loadAllData();
+      
+      // Clear selections if deleted item was selected
+      if (activeTab === 'workspaces' && selectedWorkspace?.Id === id) {
+        setSelectedWorkspace(null);
+      }
+      if (activeTab === 'projects' && selectedProject?.Id === id) {
+        setSelectedProject(null);
+        setSelectedWorkspace(null);
+      }
+      
+      toast.success(`${activeTab.slice(0, -1)} deleted successfully!`);
+    } catch (error) {
+      console.error('Error deleting item:', error);
+      toast.error('Failed to delete item');
+    } finally {
+      setLoading(false);
+    }
     }))
     toast.success(`${activeTab.slice(0, -1)} and any subtasks deleted successfully!`)
   }
 
   const handleProjectSelect = (project) => {
-    setSelectedProject(project)
+    toast.info(`Selected project: ${project.Name}`)
     setSelectedWorkspace(null)
     toast.info(`Selected project: ${project.name}`)
   }
 
-  const handleWorkspaceSelect = (workspace) => {
+    toast.info(`Selected workspace: ${workspace.Name}`)
     setSelectedWorkspace(workspace)
     toast.info(`Selected workspace: ${workspace.name}`)
-  }
-
-  const toggleTaskStatus = (task) => {
-    const newStatus = task.status === 'completed' ? 'pending' : 'completed'
-    setItems(prev => ({
-      ...prev,
-      tasks: prev.tasks.map(t => 
-        t.id === task.id ? { ...t, status: newStatus } : t
-      )
+  const toggleTaskStatus = async (task) => {
+    try {
+      const newStatus = task.status === 'completed' ? 'pending' : 'completed';
+      const updatedTask = { ...task, status: newStatus };
+      
+      const result = await TaskService.updateTasks([updatedTask]);
+      
+      if (result.length > 0) {
+        setItems(prev => ({
+          ...prev,
+          tasks: prev.tasks.map(t => 
+            t.Id === task.Id ? result[0] : t
+          )
+        }));
+        
+        // Log activity
+        await ActivityService.logActivity(currentUser.userId, 'completed task', task.title, 'task');
+        
+        toast.success(`Task ${newStatus}!`);
+      }
+    } catch (error) {
+      console.error('Error updating task status:', error);
+      toast.error('Failed to update task status');
+    }
     }))
     toast.success(`Task ${newStatus}!`)
   }
@@ -384,8 +521,8 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
 
         <form onSubmit={handleSubmit} className="space-y-4">
           {activeTab === 'tasks' && (
-            <>
-              {items.workspaces.length > 0 && (
+                    <option key={workspace.Id} value={workspace.Id}>
+                      {workspace.Name}
                 <select
                   value={formData.workspaceId || ''}
                   onChange={(e) => setFormData({ ...formData, workspaceId: e.target.value })}
@@ -400,7 +537,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
                 </select>
               )}
               {getParentTasks().length > 0 && (
-                <select
+                    <option key={task.Id} value={task.Id}>
                   value={formData.parentTaskId || ''}
                   onChange={(e) => setFormData({ ...formData, parentTaskId: e.target.value })}
                   className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700"
@@ -476,8 +613,8 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
           )}
 
           {activeTab === 'projects' && (
-            <>
-              <input
+                value={formData.Name || ''}
+                onChange={(e) => setFormData({ ...formData, Name: e.target.value })}
                 type="text"
                 placeholder="Project name"
                 value={formData.name || ''}
@@ -518,8 +655,8 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
             <>
               {items.projects.length > 0 && (
                 <select
-                  value={formData.projectId || ''}
-                  onChange={(e) => setFormData({ ...formData, projectId: e.target.value })}
+                    <option key={project.Id} value={project.Id}>
+                      {project.Name}
                   className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700"
                   required
                 >
@@ -534,8 +671,8 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
               <input
                 type="text"
                 placeholder="Workspace name"
-                value={formData.name || ''}
-                onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                value={formData.Name || ''}
+                onChange={(e) => setFormData({ ...formData, Name: e.target.value })}
                 className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700"
                 required
               />
@@ -553,8 +690,8 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
               {items.workspaces.length > 0 && (
                 <select
                   value={formData.workspaceId || ''}
-                  onChange={(e) => setFormData({ ...formData, workspaceId: e.target.value })}
-                  className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700"
+                    <option key={workspace.Id} value={workspace.Id}>
+                      {workspace.Name}
                 >
                   <option value="">Select workspace (optional)</option>
                   {items.workspaces.map(workspace => (
@@ -581,8 +718,8 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
               <input
                 type="text"
                 placeholder="Tags (comma separated)"
-                value={formData.tags || ''}
-                onChange={(e) => setFormData({ ...formData, tags: e.target.value })}
+                value={formData.Tags || ''}
+                onChange={(e) => setFormData({ ...formData, Tags: e.target.value })}
                 className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700"
               />
             </>
@@ -599,8 +736,9 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
             <button
               type="submit"
               className="flex-1 px-4 py-3 bg-gradient-to-r from-primary to-primary-dark text-white rounded-xl hover:shadow-lg transform hover:scale-105 transition-all duration-200"
+              disabled={formLoading}
             >
-              {editingItem ? 'Update' : 'Create'}
+              {formLoading ? 'Saving...' : (editingItem ? 'Update' : 'Create')}
             </button>
           </div>
         </form>
@@ -619,7 +757,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
         className="bg-white dark:bg-surface-800 rounded-2xl p-6 w-full max-w-md shadow-2xl"
         initial={{ scale: 0.8, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.8, opacity: 0 }}
+            Share {sharingItem?.Name || sharingItem?.title}
       >
         <div className="flex items-center justify-between mb-6">
           <h3 className="text-xl font-semibold">
@@ -666,14 +804,14 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
               <div className="flex items-center space-x-3">
                 <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-dark rounded-full flex items-center justify-center">
                   <span className="text-white text-sm font-medium">
-                    {currentUser.name.charAt(0)}
+                    {currentUser?.firstName?.charAt(0) || currentUser?.emailAddress?.charAt(0) || 'U'}
                   </span>
                 </div>
                 <div>
                   <div className="font-medium text-surface-900 dark:text-surface-100">
-                    {currentUser.name} (You)
+                    {currentUser?.firstName} {currentUser?.lastName} (You)
                   </div>
-                  <div className="text-sm text-surface-500">{currentUser.email}</div>
+                  <div className="text-sm text-surface-500">{currentUser?.emailAddress}</div>
                 </div>
               </div>
               <span className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full border border-primary/20">
@@ -682,26 +820,26 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
             </div>
 
             {/* Collaborators */}
-            {getCollaborators(sharingItem?.id, sharingItem?.type).map(collaborator => {
-              const user = items.users.find(u => u.id === collaborator.userId)
+            {getCollaborators(sharingItem?.Id, sharingItem?.type).map(collaborator => {
+              const user = items.users.find(u => u.Id === collaborator.userId)
               if (!user) return null
               
               return (
-                <div key={collaborator.id} className="flex items-center justify-between p-3 bg-surface-50 dark:bg-surface-700/50 rounded-lg">
+                <div key={collaborator.Id} className="flex items-center justify-between p-3 bg-surface-50 dark:bg-surface-700/50 rounded-lg">
                   <div className="flex items-center space-x-3">
                     <div className="relative">
                       <div className="w-8 h-8 bg-gradient-to-br from-secondary to-secondary-dark rounded-full flex items-center justify-center">
                         <span className="text-white text-sm font-medium">
-                          {user.name.charAt(0)}
+                          {user.Name?.charAt(0) || 'U'}
                         </span>
                       </div>
-                      {user.isOnline && (
+                      {user.isOnline === true && (
                         <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-surface-800"></div>
                       )}
                     </div>
                     <div>
                       <div className="font-medium text-surface-900 dark:text-surface-100">
-                        {user.name}
+                        {user.Name}
                       </div>
                       <div className="text-sm text-surface-500">{user.email}</div>
                     </div>
@@ -713,7 +851,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
                         setItems(prev => ({
                           ...prev,
                           collaborators: prev.collaborators.map(collab =>
-                            collab.id === collaborator.id 
+                            collab.Id === collaborator.Id 
                               ? { ...collab, permission: e.target.value }
                               : collab
                           )
@@ -726,7 +864,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
                       <option value="editor">Editor</option>
                     </select>
                     <button
-                      onClick={() => handleRemoveCollaborator(collaborator.id)}
+                      onClick={() => handleRemoveCollaborator(collaborator.Id)}
                       className="p-1 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
                     >
                       <ApperIcon name="X" className="h-3 w-3" />
@@ -736,7 +874,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
               )
             })}
 
-            {getCollaborators(sharingItem?.id, sharingItem?.type).length === 0 && (
+            {getCollaborators(sharingItem?.Id, sharingItem?.type).length === 0 && (
               <div className="text-center py-6 text-surface-500">
                 No collaborators yet. Invite someone to get started!
               </div>
@@ -753,7 +891,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
         <div className="absolute -left-6 top-6 w-4 h-px bg-surface-300 dark:bg-surface-600"></div>
       )}
       <motion.div
-      key={task.id}
+      key={task.Id}
       className={`bg-white dark:bg-surface-800 rounded-xl p-6 shadow-card hover:shadow-soft transition-all duration-200 border border-surface-200 dark:border-surface-700 ${
         task.parentTaskId ? 'border-l-4 border-l-primary/30' : ''
       }`}
@@ -834,9 +972,9 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
       </motion.div>
       
       {/* Render subtasks */}
-      {!task.parentTaskId && getSubtasks(task.id).length > 0 && (
+      {!task.parentTaskId && getSubtasks(task.Id).length > 0 && (
         <div className="mt-4 space-y-4">
-          {getSubtasks(task.id).map(subtask => renderTaskCard(subtask))}
+          {getSubtasks(task.Id).map(subtask => renderTaskCard(subtask))}
         </div>
       )}
     </div>
@@ -844,7 +982,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
 
   const renderProjectCard = (project) => (
     <motion.div
-      key={project.id}
+      key={project.Id}
       className="bg-white dark:bg-surface-800 rounded-xl p-6 shadow-card hover:shadow-soft transition-all duration-200 border border-surface-200 dark:border-surface-700"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -853,12 +991,12 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <div className="flex items-center space-x-2 mb-2">
-            <h3 className="font-semibold text-lg">{project.name}</h3>
-            {getCollaborators(project.id, 'projects').length > 0 && (
+            <h3 className="font-semibold text-lg">{project.Name}</h3>
+            {getCollaborators(project.Id, 'projects').length > 0 && (
               <div className="flex items-center space-x-1">
                 <ApperIcon name="Users" className="h-3 w-3 text-primary" />
                 <span className="text-xs text-primary font-medium">
-                  {getCollaborators(project.id, 'projects').length + 1}
+                  {getCollaborators(project.Id, 'projects').length + 1}
                 </span>
               </div>
             )}
@@ -870,7 +1008,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
             <p className="text-surface-600 dark:text-surface-400 text-sm mb-3">{project.description}</p>
           )}
           <div className="text-sm text-surface-500">
-            {getProjectWorkspaces(project.id).length} workspace(s)
+            {getProjectWorkspaces(project.Id).length} workspace(s)
           </div>
         </div>
         <div className="flex items-center space-x-2">
@@ -894,7 +1032,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
           >
             <ApperIcon name="Edit3" className="h-4 w-4" />
           </button>
-          <button
+            onClick={() => handleDelete(project.Id)}
             onClick={() => handleDelete(project.id)}
             className="p-2 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
           >
@@ -909,21 +1047,21 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
         </span>
         <div className="flex items-center space-x-1 text-surface-500 text-sm">
           <ApperIcon name="Calendar" className="h-3 w-3" />
-          <span>{format(new Date(project.createdAt), 'MMM dd, yyyy')}</span>
+          <span>{format(new Date(project.CreatedOn), 'MMM dd, yyyy')}</span>
         </div>
       </div>
     </motion.div>
   )
 
   const renderWorkspaceCard = (workspace) => {
-    const project = items.projects.find(p => p.id === workspace.projectId)
-    const taskCount = getWorkspaceTasks(workspace.id).length
-    const noteCount = getWorkspaceNotes(workspace.id).length
-    const collaborators = getCollaborators(workspace.id, 'workspaces')
+    const project = items.projects.find(p => p.Id === workspace.projectId)
+    const taskCount = getWorkspaceTasks(workspace.Id).length
+    const noteCount = getWorkspaceNotes(workspace.Id).length
+    const collaborators = getCollaborators(workspace.Id, 'workspaces')
 
     return (
     <motion.div
-      key={workspace.id}
+      key={workspace.Id}
       className="bg-white dark:bg-surface-800 rounded-xl p-6 shadow-card hover:shadow-soft transition-all duration-200 border border-surface-200 dark:border-surface-700"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -931,7 +1069,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     >
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
-          <div className="flex items-center space-x-2 mb-2">
+            <h3 className="font-semibold text-lg">{workspace.Name}</h3>
             <h3 className="font-semibold text-lg">{workspace.name}</h3>
             {collaborators.length > 0 && (
               <div className="flex items-center space-x-1">
@@ -943,7 +1081,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
             )}
           </div>
           {project && (
-            <p className="text-primary text-sm font-medium mb-1">in {project.name}</p>
+            <p className="text-primary text-sm font-medium mb-1">in {project.Name}</p>
           )}
           {workspace.description && (
             <p className="text-surface-600 dark:text-surface-400 text-sm mb-3">{workspace.description}</p>
@@ -974,7 +1112,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
             className="p-2 hover:bg-surface-100 dark:hover:bg-surface-700 rounded-lg transition-colors"
           >
             <ApperIcon name="Edit3" className="h-4 w-4" />
-          </button>
+            onClick={() => handleDelete(workspace.Id)}
           <button
             onClick={() => handleDelete(workspace.id)}
             className="p-2 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
@@ -986,7 +1124,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
       
       <div className="flex items-center justify-end">
         <div className="flex items-center space-x-1 text-surface-500 text-sm">
-          <ApperIcon name="Calendar" className="h-3 w-3" />
+          <span>{format(new Date(workspace.CreatedOn), 'MMM dd, yyyy')}</span>
           <span>{format(new Date(workspace.createdAt), 'MMM dd, yyyy')}</span>
         </div>
       </div>
@@ -996,7 +1134,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
 
   const renderNoteCard = (note) => (
     <motion.div
-      key={note.id}
+      key={note.Id}
       className="bg-white dark:bg-surface-800 rounded-xl p-6 shadow-card hover:shadow-soft transition-all duration-200 border border-surface-200 dark:border-surface-700"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -1016,7 +1154,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
           >
             <ApperIcon name="Edit3" className="h-4 w-4" />
           </button>
-          <button
+            onClick={() => handleDelete(note.Id)}
             onClick={() => handleDelete(note.id)}
             className="p-2 hover:bg-red-50 hover:text-red-600 rounded-lg transition-colors"
           >
@@ -1026,23 +1164,26 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
       </div>
       
       <div className="flex items-center justify-between">
-        {note.tags && note.tags.length > 0 && (
+        {note.Tags && (
           <div className="flex flex-wrap gap-2">
-            {note.tags.slice(0, 3).map((tag, index) => (
+            {note.Tags.split(',')
+              .filter(tag => tag.trim())
+              .slice(0, 3)
+              .map((tag, index) => (
               <span key={index} className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full">
-                #{tag}
+                #{tag.trim()}
               </span>
             ))}
-            {note.tags.length > 3 && (
+            {note.Tags.split(',').filter(tag => tag.trim()).length > 3 && (
               <span className="px-2 py-1 bg-surface-100 text-surface-600 text-xs rounded-full">
-                +{note.tags.length - 3}
+                +{note.Tags.split(',').filter(tag => tag.trim()).length - 3}
               </span>
             )}
           </div>
         )}
         <div className="flex items-center space-x-1 text-surface-500 text-sm">
           <ApperIcon name="Clock" className="h-3 w-3" />
-          <span>{format(new Date(note.updatedAt), 'MMM dd')}</span>
+          <span>{format(new Date(note.ModifiedOn), 'MMM dd')}</span>
         </div>
       </div>
     </motion.div>
@@ -1054,7 +1195,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     
     // Filter by workspace if one is selected
     if (selectedWorkspace && (activeTab === 'tasks' || activeTab === 'notes')) {
-      return allItems.filter(item => item.workspaceId === selectedWorkspace.id)
+      return allItems.filter(item => item.workspaceId === selectedWorkspace.Id)
     }
     
     if (activeTab === 'tasks' && selectedDate) {
@@ -1079,6 +1220,15 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   const isFiltered = activeTab === 'tasks' && selectedDate
   const isWorkspaceFiltered = selectedWorkspace && (activeTab === 'tasks' || activeTab === 'notes')
 
+  // Show loading state
+  if (loading && !items[activeTab]?.length) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <div className="text-lg text-surface-600 dark:text-surface-400">Loading...</div>
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-6">
       {/* Workspace/Project Selection */}
@@ -1088,13 +1238,13 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
             {selectedProject && (
               <>
                 <ApperIcon name="FolderOpen" className="h-4 w-4 text-primary" />
-                <span className="text-sm font-medium text-primary">Project: {selectedProject.name}</span>
+                <span className="text-sm font-medium text-primary">Project: {selectedProject.Name}</span>
               </>
             )}
             {selectedWorkspace && (
               <>
                 <ApperIcon name="Layers" className="h-4 w-4 text-primary ml-4" />
-                <span className="text-sm font-medium text-primary">Workspace: {selectedWorkspace.name}</span>
+                <span className="text-sm font-medium text-primary">Workspace: {selectedWorkspace.Name}</span>
               </>
             )}
           </div>
@@ -1134,7 +1284,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
             )}
             {isWorkspaceFiltered && (
               <span className="text-sm font-normal text-surface-500 ml-2">
-                in {selectedWorkspace.name}
+                in {selectedWorkspace.Name}
               </span>
             )}
           </h2>
@@ -1142,7 +1292,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
             {isFiltered 
               ? `Tasks due on ${format(selectedDate, 'MMM dd, yyyy')}` 
               : isWorkspaceFiltered
-                ? `${activeTab} in ${selectedWorkspace.name} workspace`
+                ? `${activeTab} in ${selectedWorkspace.Name} workspace`
               : currentItems.length === 0 
                 ? `Create your first ${activeTab.slice(0, -1)} to get started` 
                 : `Manage your ${activeTab} efficiently`
@@ -1165,8 +1315,8 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
           {activeTab === 'projects' && selectedProject && (
             <motion.button
               onClick={() => {
-                setActiveTab('workspaces')
-                setFormData({ ...getFormFields(), projectId: selectedProject.id })
+                // Don't change tab, just open form for workspace creation
+                setFormData({ ...getFormFields(), projectId: selectedProject.Id })
                 setEditingItem(null)
                 setShowForm(true)
               }}
@@ -1182,6 +1332,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
         <motion.button
           onClick={handleCreate}
           className="flex items-center space-x-2 bg-gradient-to-r from-primary to-primary-dark text-white px-6 py-3 rounded-xl font-medium shadow-card hover:shadow-soft transform hover:scale-105 transition-all duration-200"
+          disabled={loading}
           whileHover={{ scale: 1.05 }}
           whileTap={{ scale: 0.95 }}
         >
@@ -1243,6 +1394,12 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
       <AnimatePresence>
         {showForm && renderForm()}
       </AnimatePresence>
+      
+      {error && (
+        <div className="text-center py-4 text-red-600">
+          {error}
+        </div>
+      )}
 
       <AnimatePresence>
         {showShareModal && renderShareModal()}
