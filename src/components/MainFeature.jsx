@@ -5,8 +5,24 @@ import { format, isSameDay, isToday, isPast, startOfDay } from 'date-fns'
 import ApperIcon from './ApperIcon'
 
 const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
+  // Mock current user data
+  const [currentUser] = useState({
+    id: 'user1',
+    name: 'John Doe',
+    email: 'john@example.com',
+    avatar: null
+  })
+
   const [filteredByDate, setFilteredByDate] = useState(false)
   const [items, setItems] = useState({
+    users: [
+      { id: 'user1', name: 'John Doe', email: 'john@example.com', avatar: null, isOnline: true },
+      { id: 'user2', name: 'Jane Smith', email: 'jane@example.com', avatar: null, isOnline: false },
+      { id: 'user3', name: 'Mike Johnson', email: 'mike@example.com', avatar: null, isOnline: true },
+      { id: 'user4', name: 'Sarah Wilson', email: 'sarah@example.com', avatar: null, isOnline: false },
+      { id: 'user5', name: 'David Brown', email: 'david@example.com', avatar: null, isOnline: true }
+    ],
+    collaborators: [],
     tasks: [],
     projects: [],
     workspaces: [],
@@ -18,6 +34,9 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   const [formData, setFormData] = useState({})
   const [selectedProject, setSelectedProject] = useState(null)
   const [selectedWorkspace, setSelectedWorkspace] = useState(null)
+  const [showShareModal, setShowShareModal] = useState(false)
+  const [sharingItem, setSharingItem] = useState(null)
+  const [shareEmail, setShareEmail] = useState('')
 
   // Load data from localStorage on component mount
   useEffect(() => {
@@ -40,6 +59,71 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   }, [selectedDate])
 
   const generateId = () => Date.now().toString()
+
+  const handleShare = (item, type) => {
+    setSharingItem({ ...item, type })
+    setShowShareModal(true)
+    setShareEmail('')
+  }
+
+  const handleInviteCollaborator = (e) => {
+    e.preventDefault()
+    
+    if (!shareEmail.trim()) {
+      toast.error('Please enter an email address')
+      return
+    }
+
+    // Check if user exists in mock database
+    const existingUser = items.users.find(user => user.email.toLowerCase() === shareEmail.toLowerCase())
+    
+    if (!existingUser) {
+      toast.error('User not found. Please check the email address.')
+      return
+    }
+
+    // Check if already a collaborator
+    const existingCollaborator = items.collaborators.find(collab => 
+      collab.userId === existingUser.id && 
+      collab.itemId === sharingItem.id && 
+      collab.itemType === sharingItem.type
+    )
+
+    if (existingCollaborator) {
+      toast.error('User is already a collaborator')
+      return
+    }
+
+    const newCollaborator = {
+      id: generateId(),
+      userId: existingUser.id,
+      itemId: sharingItem.id,
+      itemType: sharingItem.type,
+      permission: 'editor',
+      invitedBy: currentUser.id,
+      invitedAt: new Date().toISOString()
+    }
+
+    setItems(prev => ({
+      ...prev,
+      collaborators: [...prev.collaborators, newCollaborator]
+    }))
+
+    toast.success(`${existingUser.name} has been invited as a collaborator`)
+    setShareEmail('')
+  }
+
+  const handleRemoveCollaborator = (collaboratorId) => {
+    setItems(prev => ({
+      ...prev,
+      collaborators: prev.collaborators.filter(collab => collab.id !== collaboratorId)
+    }))
+    toast.success('Collaborator removed successfully')
+  }
+
+  const getCollaborators = (itemId, itemType) => {
+    return items.collaborators.filter(collab => collab.itemId === itemId && collab.itemType === itemType)
+  }
 
   const getFormFields = () => {
     switch (activeTab) {
@@ -137,7 +221,8 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
       ...formData,
       id: editingItem?.id || generateId(),
       createdAt: editingItem?.createdAt || new Date().toISOString(),
-      updatedAt: new Date().toISOString()
+      updatedAt: new Date().toISOString(),
+      ownerId: editingItem?.ownerId || currentUser.id
     }
 
     if (activeTab === 'notes' && typeof newItem.tags === 'string') {
@@ -513,6 +598,145 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     </motion.div>
   )
 
+  const renderShareModal = () => (
+    <motion.div
+      className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4 z-50"
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      exit={{ opacity: 0 }}
+    >
+      <motion.div
+        className="bg-white dark:bg-surface-800 rounded-2xl p-6 w-full max-w-md shadow-2xl"
+        initial={{ scale: 0.8, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
+        exit={{ scale: 0.8, opacity: 0 }}
+      >
+        <div className="flex items-center justify-between mb-6">
+          <h3 className="text-xl font-semibold">
+            Share {sharingItem?.name || sharingItem?.title}
+          </h3>
+          <button
+            onClick={() => setShowShareModal(false)}
+            className="p-2 hover:bg-surface-100 dark:hover:bg-surface-700 rounded-lg transition-colors"
+          >
+            <ApperIcon name="X" className="h-4 w-4" />
+          </button>
+        </div>
+
+        <form onSubmit={handleInviteCollaborator} className="space-y-4 mb-6">
+          <div>
+            <label className="block text-sm font-medium text-surface-700 dark:text-surface-300 mb-2">
+              Invite collaborator by email
+            </label>
+            <div className="flex space-x-2">
+              <input
+                type="email"
+                placeholder="Enter email address"
+                value={shareEmail}
+                onChange={(e) => setShareEmail(e.target.value)}
+                className="flex-1 px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700"
+              />
+              <button
+                type="submit"
+                className="px-4 py-3 bg-gradient-to-r from-primary to-primary-dark text-white rounded-xl hover:shadow-lg transition-all duration-200"
+              >
+                <ApperIcon name="Send" className="h-4 w-4" />
+              </button>
+            </div>
+          </div>
+        </form>
+
+        <div className="border-t border-surface-200 dark:border-surface-600 pt-6">
+          <h4 className="font-medium text-surface-900 dark:text-surface-100 mb-4">
+            Current Collaborators ({getCollaborators(sharingItem?.id, sharingItem?.type).length})
+          </h4>
+          <div className="space-y-3 max-h-60 overflow-y-auto">
+            {/* Owner */}
+            <div className="flex items-center justify-between p-3 bg-surface-50 dark:bg-surface-700/50 rounded-lg">
+              <div className="flex items-center space-x-3">
+                <div className="w-8 h-8 bg-gradient-to-br from-primary to-primary-dark rounded-full flex items-center justify-center">
+                  <span className="text-white text-sm font-medium">
+                    {currentUser.name.charAt(0)}
+                  </span>
+                </div>
+                <div>
+                  <div className="font-medium text-surface-900 dark:text-surface-100">
+                    {currentUser.name} (You)
+                  </div>
+                  <div className="text-sm text-surface-500">{currentUser.email}</div>
+                </div>
+              </div>
+              <span className="px-2 py-1 bg-primary/10 text-primary text-xs rounded-full border border-primary/20">
+                Owner
+              </span>
+            </div>
+
+            {/* Collaborators */}
+            {getCollaborators(sharingItem?.id, sharingItem?.type).map(collaborator => {
+              const user = items.users.find(u => u.id === collaborator.userId)
+              if (!user) return null
+              
+              return (
+                <div key={collaborator.id} className="flex items-center justify-between p-3 bg-surface-50 dark:bg-surface-700/50 rounded-lg">
+                  <div className="flex items-center space-x-3">
+                    <div className="relative">
+                      <div className="w-8 h-8 bg-gradient-to-br from-secondary to-secondary-dark rounded-full flex items-center justify-center">
+                        <span className="text-white text-sm font-medium">
+                          {user.name.charAt(0)}
+                        </span>
+                      </div>
+                      {user.isOnline && (
+                        <div className="absolute -bottom-0.5 -right-0.5 w-3 h-3 bg-green-500 rounded-full border-2 border-white dark:border-surface-800"></div>
+                      )}
+                    </div>
+                    <div>
+                      <div className="font-medium text-surface-900 dark:text-surface-100">
+                        {user.name}
+                      </div>
+                      <div className="text-sm text-surface-500">{user.email}</div>
+                    </div>
+                  </div>
+                  <div className="flex items-center space-x-2">
+                    <select
+                      value={collaborator.permission}
+                      onChange={(e) => {
+                        setItems(prev => ({
+                          ...prev,
+                          collaborators: prev.collaborators.map(collab =>
+                            collab.id === collaborator.id 
+                              ? { ...collab, permission: e.target.value }
+                              : collab
+                          )
+                        }))
+                        toast.success('Permission updated')
+                      }}
+                      className="text-xs px-2 py-1 border border-surface-200 dark:border-surface-600 rounded bg-white dark:bg-surface-700"
+                    >
+                      <option value="viewer">Viewer</option>
+                      <option value="editor">Editor</option>
+                    </select>
+                    <button
+                      onClick={() => handleRemoveCollaborator(collaborator.id)}
+                      className="p-1 hover:bg-red-50 hover:text-red-600 rounded transition-colors"
+                    >
+                      <ApperIcon name="X" className="h-3 w-3" />
+                    </button>
+                  </div>
+                </div>
+              )
+            })}
+
+            {getCollaborators(sharingItem?.id, sharingItem?.type).length === 0 && (
+              <div className="text-center py-6 text-surface-500">
+                No collaborators yet. Invite someone to get started!
+              </div>
+            )}
+          </div>
+        </div>
+      </motion.div>
+    </motion.div>
+  )
+
   const renderTaskCard = (task) => (
     <div className={task.parentTaskId ? 'ml-8 relative' : ''}>
       {task.parentTaskId && (
@@ -611,6 +835,12 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   const renderProjectCard = (project) => (
     <motion.div
       key={project.id}
+      className={`bg-white dark:bg-surface-800 rounded-xl p-6 shadow-card hover:shadow-soft transition-all duration-200 border border-surface-200 dark:border-surface-700 ${
+        getCollaborators(project.id, 'projects').length > 0 ? 'ring-2 ring-primary/10' : ''
+      }`}
+      initial={{ opacity: 0, y: 20 }}
+      animate={{ opacity: 1, y: 0 }}
+      key={project.id}
       className="bg-white dark:bg-surface-800 rounded-xl p-6 shadow-card hover:shadow-soft transition-all duration-200 border border-surface-200 dark:border-surface-700"
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
@@ -619,6 +849,16 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <div className="flex items-center space-x-2 mb-2">
+            <h3 className="font-semibold text-lg">{project.name}</h3>
+            {getCollaborators(project.id, 'projects').length > 0 && (
+              <div className="flex items-center space-x-1">
+                <ApperIcon name="Users" className="h-3 w-3 text-primary" />
+                <span className="text-xs text-primary font-medium">
+                  {getCollaborators(project.id, 'projects').length + 1}
+                </span>
+              </div>
+            )}
+            <span className={`px-2 py-1 rounded-full text-xs border ${project.category === 'work' ? 'text-blue-600 bg-blue-50 border-blue-200' : project.category === 'personal' ? 'text-green-600 bg-green-50 border-green-200' : 'text-purple-600 bg-purple-50 border-purple-200'}`}>
             <h3 className="font-semibold text-lg">{project.name}</h3>
             <span className={`px-2 py-1 rounded-full text-xs border ${project.category === 'work' ? 'text-blue-600 bg-blue-50 border-blue-200' : project.category === 'personal' ? 'text-green-600 bg-green-50 border-green-200' : 'text-purple-600 bg-purple-50 border-purple-200'}`}>
               {project.category}
@@ -633,6 +873,15 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
         </div>
         <div className="flex items-center space-x-2">
           <button
+            onClick={() => handleShare(project, 'projects')}
+            className="p-2 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors"
+            title="Share Project"
+          >
+            <ApperIcon name="Share2" className="h-4 w-4" />
+          </button>
+          <button
+            onClick={() => handleProjectSelect(project)}
+            className="p-2 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors"
             onClick={() => handleProjectSelect(project)}
             className="p-2 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors"
             title="Select Project"
@@ -670,6 +919,11 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     const project = items.projects.find(p => p.id === workspace.projectId)
     const taskCount = getWorkspaceTasks(workspace.id).length
     const noteCount = getWorkspaceNotes(workspace.id).length
+    const collaborators = getCollaborators(workspace.id, 'workspaces')
+
+    return (
+    <motion.div
+      key={workspace.id}
 
     return (
     <motion.div
@@ -682,6 +936,17 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
       <div className="flex items-start justify-between mb-4">
         <div className="flex-1">
           <h3 className="font-semibold text-lg">{workspace.name}</h3>
+          <div className="flex items-center space-x-2 mb-2">
+            <h3 className="font-semibold text-lg">{workspace.name}</h3>
+            {collaborators.length > 0 && (
+              <div className="flex items-center space-x-1">
+                <ApperIcon name="Users" className="h-3 w-3 text-primary" />
+                <span className="text-xs text-primary font-medium">
+                  {collaborators.length + 1}
+                </span>
+              </div>
+            )}
+          </div>
           {project && (
             <p className="text-primary text-sm font-medium mb-1">in {project.name}</p>
           )}
@@ -689,11 +954,20 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
             <p className="text-surface-600 dark:text-surface-400 text-sm mb-3">{workspace.description}</p>
           )}
           <div className="flex items-center space-x-4 text-sm text-surface-500">
+          )}
+          <div className="flex items-center space-x-4 text-sm text-surface-500">
             <span>{taskCount} task(s)</span>
             <span>{noteCount} note(s)</span>
           </div>
         </div>
         <div className="flex items-center space-x-2">
+          <button
+            onClick={() => handleShare(workspace, 'workspaces')}
+            className="p-2 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors"
+            title="Share Workspace"
+          >
+            <ApperIcon name="Share2" className="h-4 w-4" />
+          </button>
           <button
             onClick={() => handleWorkspaceSelect(workspace)}
             className="p-2 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors"
@@ -974,6 +1248,10 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
       {/* Form Modal */}
       <AnimatePresence>
         {showForm && renderForm()}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {showShareModal && renderShareModal()}
       </AnimatePresence>
     </div>
   )
