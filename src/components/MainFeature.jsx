@@ -269,6 +269,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
                 </div>
             </>
           )}
+          )}
 
           {activeTab === 'projects' && (
             <>
