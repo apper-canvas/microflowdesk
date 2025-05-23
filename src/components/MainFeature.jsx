@@ -42,6 +42,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     switch (activeTab) {
       case 'tasks':
         return {
+          parentTaskId: '',
           title: '',
           description: '',
           priority: 'medium',
@@ -65,6 +66,15 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     }
   }
 
+  const getParentTasks = () => {
+    return items.tasks.filter(task => !task.parentTaskId)
+  }
+
+  const getSubtasks = (parentId) => {
+    return items.tasks.filter(task => task.parentTaskId === parentId)
+      .sort((a, b) => new Date(a.createdAt) - new Date(b.createdAt))
+  }
+
   const handleCreate = () => {
     setFormData(getFormFields())
     setEditingItem(null)
@@ -79,6 +89,12 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     }
   }
 
+
+  const handleCreateSubtask = (parentTask) => {
+    setFormData({ ...getFormFields(), parentTaskId: parentTask.id })
+    setEditingItem(null)
+    setShowForm(true)
+  }
 
   const handleEdit = (item) => {
     setFormData({ ...item })
@@ -121,9 +137,15 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   const handleDelete = (id) => {
     setItems(prev => ({
       ...prev,
-      [activeTab]: prev[activeTab].filter(item => item.id !== id)
+      [activeTab]: prev[activeTab].filter(item => {
+        if (activeTab === 'tasks') {
+          // Also delete any subtasks of the deleted task
+          return item.id !== id && item.parentTaskId !== id
+        }
+        return item.id !== id
+      })
     }))
-    toast.success(`${activeTab.slice(0, -1)} deleted successfully!`)
+    toast.success(`${activeTab.slice(0, -1)} and any subtasks deleted successfully!`)
   }
 
   const toggleTaskStatus = (task) => {
@@ -209,6 +231,20 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
         <form onSubmit={handleSubmit} className="space-y-4">
           {activeTab === 'tasks' && (
             <>
+              {getParentTasks().length > 0 && (
+                <select
+                  value={formData.parentTaskId || ''}
+                  onChange={(e) => setFormData({ ...formData, parentTaskId: e.target.value })}
+                  className="w-full px-4 py-3 border border-surface-200 dark:border-surface-600 rounded-xl focus:ring-2 focus:ring-primary/20 focus:border-primary bg-white dark:bg-surface-700"
+                >
+                  <option value="">Select parent task (optional)</option>
+                  {getParentTasks().map(task => (
+                    <option key={task.id} value={task.id}>
+                      {task.title}
+                    </option>
+                  ))}
+                </select>
+              )}
               <input
                 type="text"
                 placeholder="Task title"
@@ -346,9 +382,15 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
   )
 
   const renderTaskCard = (task) => (
-    <motion.div
+    <div className={task.parentTaskId ? 'ml-8 relative' : ''}>
+      {task.parentTaskId && (
+        <div className="absolute -left-6 top-6 w-4 h-px bg-surface-300 dark:bg-surface-600"></div>
+      )}
+      <motion.div
       key={task.id}
-      className="bg-white dark:bg-surface-800 rounded-xl p-6 shadow-card hover:shadow-soft transition-all duration-200 border border-surface-200 dark:border-surface-700"
+      className={`bg-white dark:bg-surface-800 rounded-xl p-6 shadow-card hover:shadow-soft transition-all duration-200 border border-surface-200 dark:border-surface-700 ${
+        task.parentTaskId ? 'border-l-4 border-l-primary/30' : ''
+      }`}
       initial={{ opacity: 0, y: 20 }}
       animate={{ opacity: 1, y: 0 }}
       whileHover={{ y: -2 }}
@@ -375,6 +417,15 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
           </div>
         </div>
         <div className="flex items-center space-x-2">
+          {!task.parentTaskId && (
+            <button
+              onClick={() => handleCreateSubtask(task)}
+              className="p-2 hover:bg-primary/10 hover:text-primary rounded-lg transition-colors"
+              title="Add Subtask"
+            >
+              <ApperIcon name="Plus" className="h-4 w-4" />
+            </button>
+          )}
           <button
             onClick={() => handleEdit(task)}
             className="p-2 hover:bg-surface-100 dark:hover:bg-surface-700 rounded-lg transition-colors"
@@ -414,7 +465,15 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
           </div>
         )}
       </div>
-    </motion.div>
+      </motion.div>
+      
+      {/* Render subtasks */}
+      {!task.parentTaskId && getSubtasks(task.id).length > 0 && (
+        <div className="mt-4 space-y-4">
+          {getSubtasks(task.id).map(subtask => renderTaskCard(subtask))}
+        </div>
+      )}
+    </div>
   )
 
   const renderProjectCard = (project) => (
@@ -519,9 +578,16 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
     const allItems = items[activeTab] || []
     
     if (activeTab === 'tasks' && selectedDate) {
-      return allItems.filter(task => 
+      const filteredTasks = allItems.filter(task => 
         task.dueDate && isSameDay(new Date(task.dueDate), selectedDate)
       )
+      // Only return parent tasks when filtering by date, subtasks will be rendered within parents
+      return filteredTasks.filter(task => !task.parentTaskId)
+    }
+    
+    if (activeTab === 'tasks') {
+      // For tasks, only show parent tasks (subtasks will be rendered within parents)
+      return allItems.filter(task => !task.parentTaskId)
     }
     
     return allItems
@@ -529,6 +595,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
 
   const currentItems = getCurrentItems()
   const totalItems = items[activeTab]?.length || 0
+  const totalParentTasks = activeTab === 'tasks' ? items.tasks.filter(task => !task.parentTaskId).length : totalItems
   const isFiltered = activeTab === 'tasks' && selectedDate
 
   return (
@@ -537,7 +604,7 @@ const MainFeature = ({ activeTab, selectedDate, setSelectedDate }) => {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-2xl font-bold text-surface-900 dark:text-surface-100">
-            {isFiltered ? `${currentItems.length} of ${totalItems}` : currentItems.length} {activeTab}
+            {isFiltered ? `${currentItems.length} of ${totalParentTasks}` : currentItems.length} {activeTab === 'tasks' ? 'tasks' : activeTab}
             {isFiltered && (
               <span className="text-sm font-normal text-surface-500 ml-2">
                 for {format(selectedDate, 'MMM dd, yyyy')}
